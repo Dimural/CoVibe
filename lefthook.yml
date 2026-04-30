@@ -1,11 +1,13 @@
+# npx pnpm is used because git hook environments don't inherit nvm's PATH;
+# replace with `pnpm` once a system-level pnpm install is standard.
 pre-commit:
   parallel: true
   commands:
     lint:
-      glob: '*.{ts,tsx,js}'
+      glob: '**/*.{ts,tsx,js}'
       run: npx pnpm eslint {staged_files}
     format:
-      glob: '*.{ts,tsx,js,json,md}'
+      glob: '**/*.{ts,tsx,js,json,md}'
       run: npx pnpm prettier --check {staged_files}
     typecheck:
       run: npx pnpm typecheck

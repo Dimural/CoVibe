@@ -15,12 +15,8 @@ permissions:
 
 jobs:
   ci:
-    name: CI (Node ${{ matrix.node }} / ${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        node: [20]
+    name: CI
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -34,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
 
       - name: Install dependencies
