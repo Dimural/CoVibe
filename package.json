@@ -2,12 +2,15 @@
   "name": "covibes",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "packageManager": "pnpm@9.12.0",
-  "engines": { "node": ">=20.10.0" },
+  "engines": {
+    "node": ">=20.10.0"
+  },
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "lint": "pnpm -r lint",
+    "lint": "eslint . --no-error-on-unmatched-pattern && pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write ."
   },
