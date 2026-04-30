@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm list *)",
+      "Read(//usr/local/bin/**)",
+      "Bash(npx pnpm *)",
+      "Bash(npx tsc *)",
+      "Bash(git -C /Users/dimural/CoVibe status)",
+      "Bash(git -C /Users/dimural/CoVibe diff --stat HEAD)",
+      "Bash(git -C /Users/dimural/CoVibe add .editorconfig .nvmrc LICENSE README.md package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json lefthook.yml)",
+      "Bash(git -C /Users/dimural/CoVibe commit -m ' *)",
+      "Bash(grep -v \"^commit\\\\|^Author\\\\|^Date\\\\|^$\\\\|chore:\")",
+      "Bash(git -C /Users/dimural/CoVibe ls-files node_modules)",
+      "Bash(git -C /Users/dimural/CoVibe ls-files pnpm-lock.yaml)",
+      "Bash(git -C /Users/dimural/CoVibe show 09acfe8 --name-only --format=\"\")"
+    ]
+  }
+}

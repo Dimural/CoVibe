@@ -8,7 +8,7 @@ Real-time collaborative coding inside VS Code, with AI-agent awareness.
 
 ## Repository Structure
 
-This is a pnpm monorepo. The following packages are being built out:
+This is a pnpm monorepo. Planned package layout:
 
 ```
 packages/

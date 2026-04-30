@@ -13,6 +13,6 @@
     "declaration": true,
     "sourceMap": true,
     "composite": true,
-    "incremental": true
+    "declarationMap": true
   }
 }
