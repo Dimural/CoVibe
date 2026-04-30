@@ -1,0 +1,48 @@
+# Internal planning docs — not for the public repo
+CoVibes_PRD.md
+CoVibes_PLAN.md
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+dist/
+out/
+build/
+*.vsix
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+.nyc_output/
+.vscode-test/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+.idea/
+*.swp
+*.swo
+Thumbs.db
+
+# VS Code (keep shared settings, ignore local)
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+
+# Worktrees / scratch
+.worktrees/
+scratch/
+tmp/
