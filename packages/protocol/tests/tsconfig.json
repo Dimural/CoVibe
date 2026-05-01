@@ -1,0 +1,10 @@
+// Auto-discovered by ESLint projectService for test files (must be named tsconfig.json)
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "rootDir": ".."
+  },
+  "include": ["../src/**/*", "./**/*"]
+}

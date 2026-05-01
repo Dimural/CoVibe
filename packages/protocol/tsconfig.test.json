@@ -1,0 +1,10 @@
+// Used by `tsc -p tsconfig.test.json --noEmit` to type-check tests outside src/
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "rootDir": "."
+  },
+  "include": ["src/**/*", "tests/**/*"]
+}
