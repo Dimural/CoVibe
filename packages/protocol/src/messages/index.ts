@@ -23,8 +23,7 @@ import { PongPayload as _Pong } from './pong.js';
 
 /**
  * Re-export each payload schema (value) and its inferred TypeScript type (type).
- * A single `export { X }` from a module makes both the value and type available to consumers;
- * a separate `export type { X }` for the same name would cause a duplicate-identifier error.
+ * A single `export { X }` from a module makes both the value and type available to consumers.
  */
 export { SessionJoinPayload } from './session-join.js';
 export { SessionLeavePayload } from './session-leave.js';
@@ -41,23 +40,6 @@ export { NavFilePayload } from './nav-file.js';
 export { ErrorPayload } from './error.js';
 export { PingPayload } from './ping.js';
 export { PongPayload } from './pong.js';
-
-// Re-export the payload types separately so they can be imported with `import type`.
-export type { SessionJoinPayload as SessionJoinPayloadType } from './session-join.js';
-export type { SessionLeavePayload as SessionLeavePayloadType } from './session-leave.js';
-export type { SessionStatePayload as SessionStatePayloadType } from './session-state.js';
-export type { DocDeltaPayload as DocDeltaPayloadType } from './doc-delta.js';
-export type { CursorUpdatePayload as CursorUpdatePayloadType } from './cursor-update.js';
-export type { AgentIntentPayload as AgentIntentPayloadType } from './agent-intent.js';
-export type { AgentChangePayload as AgentChangePayloadType } from './agent-change.js';
-export type { ConflictOpenPayload as ConflictOpenPayloadType } from './conflict-open.js';
-export type { ConflictResolvePayload as ConflictResolvePayloadType } from './conflict-resolve.js';
-export type { GitOperationPayload as GitOperationPayloadType } from './git-operation.js';
-export type { GitAckPayload as GitAckPayloadType } from './git-ack.js';
-export type { NavFilePayload as NavFilePayloadType } from './nav-file.js';
-export type { ErrorPayload as ErrorPayloadType } from './error.js';
-export type { PingPayload as PingPayloadType } from './ping.js';
-export type { PongPayload as PongPayloadType } from './pong.js';
 
 /** Maps every known wire message type string to its payload Zod schema. */
 export const MessageMap = {

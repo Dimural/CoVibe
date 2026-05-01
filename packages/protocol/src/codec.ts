@@ -52,6 +52,11 @@ export interface DecodedMessage<T extends MessageType> {
   envelope: Envelope;
 }
 
+/** Distributive union of all possible decoded messages; enables type narrowing on `type`. */
+export type AnyDecodedMessage = {
+  [T in MessageType]: DecodedMessage<T>;
+}[MessageType];
+
 /**
  * Decodes a raw JSON string into a typed, validated message.
  *
@@ -62,7 +67,7 @@ export interface DecodedMessage<T extends MessageType> {
  *
  * @throws {@link ProtocolError} with code `'invalid-json' | 'invalid-envelope' | 'version-mismatch' | 'unknown-type' | 'invalid-payload'`.
  */
-export function decode(input: string): DecodedMessage<MessageType> {
+export function decode(input: string): AnyDecodedMessage {
   const envelope = parseEnvelope(input);
   const type = envelope.type;
 
@@ -86,5 +91,5 @@ export function decode(input: string): DecodedMessage<MessageType> {
     type: knownType,
     payload: result.data,
     envelope,
-  };
+  } as AnyDecodedMessage;
 }

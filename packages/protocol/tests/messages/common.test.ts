@@ -16,6 +16,7 @@ import { CursorUpdatePayload } from '../../src/messages/cursor-update.js';
 import { NavFilePayload } from '../../src/messages/nav-file.js';
 import { GitOperationPayload } from '../../src/messages/git-operation.js';
 import { ErrorPayload } from '../../src/messages/error.js';
+import { ConflictOpenPayload } from '../../src/messages/conflict-open.js';
 
 // ---------- RelPath ----------
 describe('RelPath', () => {
@@ -43,6 +44,22 @@ describe('RelPath', () => {
 
   it('rejects backslash paths', () => {
     expect(() => RelPath.parse('foo\\bar')).toThrow();
+  });
+
+  it('rejects null byte in path', () => {
+    expect(() => RelPath.parse('foo\x00bar')).toThrow();
+  });
+
+  it('accepts triple-dot directory name', () => {
+    expect(() => RelPath.parse('...')).not.toThrow();
+  });
+
+  it('accepts filename containing double-dot (changelog..md)', () => {
+    expect(() => RelPath.parse('changelog..md')).not.toThrow();
+  });
+
+  it('accepts filename like packages..old/src/a.ts', () => {
+    expect(() => RelPath.parse('packages..old/src/a.ts')).not.toThrow();
   });
 });
 
@@ -196,6 +213,29 @@ describe('GitOperationPayload', () => {
 
   it("rejects kind 'unknown'", () => {
     expect(() => GitOperationPayload.parse({ kind: 'unknown' })).toThrow();
+  });
+
+  it("rejects 'push' with extra message field (strict)", () => {
+    expect(() =>
+      GitOperationPayload.parse({ kind: 'push', message: 'should not be here' }),
+    ).toThrow();
+  });
+});
+
+// ---------- conflict.open ----------
+describe('ConflictOpenPayload', () => {
+  it('rejects conflict.open texts exceeding 1 MiB', () => {
+    const huge = 'x'.repeat(1_048_577);
+    expect(() =>
+      ConflictOpenPayload.parse({
+        path: 'src/a.ts',
+        conflictId: '11111111-1111-4111-8111-111111111111',
+        peers: ['p1', 'p2'],
+        leftText: huge,
+        rightText: '',
+        baseText: '',
+      }),
+    ).toThrow();
   });
 });
 

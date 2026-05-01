@@ -6,5 +6,11 @@ export {
   type Envelope,
   type ProtocolErrorCode,
 } from './envelope.js';
-export { encode, decode, type EncodeOptions, type DecodedMessage } from './codec.js';
+export {
+  encode,
+  decode,
+  type EncodeOptions,
+  type DecodedMessage,
+  type AnyDecodedMessage,
+} from './codec.js';
 export * from './messages/index.js';

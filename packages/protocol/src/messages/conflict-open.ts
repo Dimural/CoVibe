@@ -10,9 +10,12 @@ export const ConflictOpenPayload = z
     path: RelPath,
     conflictId: z.string().uuid(),
     peers: z.array(ParticipantId),
-    leftText: z.string(),
-    rightText: z.string(),
-    baseText: z.string(),
+    /** Capped at 1 MiB; transport layer also enforces a hard size limit. */
+    leftText: z.string().max(1_048_576),
+    /** Capped at 1 MiB; transport layer also enforces a hard size limit. */
+    rightText: z.string().max(1_048_576),
+    /** Capped at 1 MiB; transport layer also enforces a hard size limit. */
+    baseText: z.string().max(1_048_576),
   })
   .strict();
 export type ConflictOpenPayload = z.infer<typeof ConflictOpenPayload>;

@@ -9,7 +9,7 @@ import { RelPath } from './_common.js';
 export const AgentIntentPayload = z
   .object({
     path: RelPath,
-    description: z.string().max(280),
+    description: z.string().min(1).max(280),
   })
   .strict();
 export type AgentIntentPayload = z.infer<typeof AgentIntentPayload>;

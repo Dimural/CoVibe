@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 export const GitAckPayload = z
   .object({
+    /** operationId is the Envelope.id of the originating `git.operation` message. */
     operationId: z.string().uuid(),
     accepted: z.boolean(),
     reason: z.string().max(280).optional(),

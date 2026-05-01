@@ -110,6 +110,19 @@ describe('encode rejects invalid payloads', () => {
   });
 });
 
+describe('decode type narrowing', () => {
+  it('narrows payload type after switching on type', () => {
+    const wire = encode('ping', {});
+    const msg = decode(wire);
+    if (msg.type === 'ping') {
+      // Type assertion: msg.payload is PingPayload (empty object)
+      expect(msg.payload).toEqual({});
+    } else {
+      throw new Error('expected ping');
+    }
+  });
+});
+
 describe('decode error cases', () => {
   it("throws 'unknown-type' for unknown message type", () => {
     const wire = JSON.stringify({

@@ -6,13 +6,15 @@ import { z, type ZodError } from 'zod';
 import { PROTOCOL_VERSION } from './version.js';
 
 /** Zod schema for the outer message envelope. Payload shape is validated separately in `decode()`. */
-export const EnvelopeSchema = z.object({
-  v: z.literal(PROTOCOL_VERSION),
-  id: z.string().uuid(),
-  ts: z.number().int().nonnegative(),
-  type: z.string(),
-  payload: z.unknown(),
-});
+export const EnvelopeSchema = z
+  .object({
+    v: z.literal(PROTOCOL_VERSION),
+    id: z.string().uuid(),
+    ts: z.number().int().nonnegative(),
+    type: z.string(),
+    payload: z.unknown(),
+  })
+  .strict();
 
 export type Envelope = z.infer<typeof EnvelopeSchema>;
 

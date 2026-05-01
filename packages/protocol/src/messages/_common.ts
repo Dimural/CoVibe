@@ -22,16 +22,23 @@ export type SessionId = z.infer<typeof SessionId>;
 
 /**
  * POSIX-style relative path within the workspace.
- * Rejects: absolute paths, backslashes, empty strings, and `..` traversal segments.
+ * Rejects: absolute paths, backslashes, empty strings, null bytes, and `..` traversal segments.
  */
 export const RelPath = z
   .string()
   .min(1)
   .max(1024)
-  .refine((p) => !p.startsWith('/') && !p.includes('\\') && !p.includes('..'), {
-    message:
-      'RelPath must be a relative POSIX path with no traversal segments (`..`) or backslashes',
-  });
+  .refine(
+    (p) =>
+      !p.startsWith('/') &&
+      !p.includes('\\') &&
+      !p.includes('\0') &&
+      !p.split('/').some((seg) => seg === '..'),
+    {
+      message:
+        'RelPath must be a relative POSIX path with no `..` segments, backslashes, or null bytes',
+    },
+  );
 export type RelPath = z.infer<typeof RelPath>;
 
 /** Unicode codepoint offset (NOT UTF-16 code-unit index). */

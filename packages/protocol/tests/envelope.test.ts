@@ -66,4 +66,17 @@ describe('parseEnvelope', () => {
     const env = parseEnvelope(JSON.stringify({ ...validRaw, payload: 'arbitrary string' }));
     expect(env.payload).toBe('arbitrary string');
   });
+
+  it("throws 'invalid-envelope' for extra fields on the envelope", () => {
+    const bad = JSON.stringify({
+      v: 1,
+      id: '11111111-1111-4111-8111-111111111111',
+      ts: 0,
+      type: 'ping',
+      payload: {},
+      extra: true,
+    });
+    const err = tryParse(bad);
+    expect(err.code).toBe('invalid-envelope');
+  });
 });
