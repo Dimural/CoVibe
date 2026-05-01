@@ -80,6 +80,7 @@ export function canonicalRepoIdentity(remoteUrl: string): string {
   }
 
   const trimmed = remoteUrl.trim();
+  const redact = (u: string): string => u.replace(/:\/\/[^@/]+@/, '://[redacted]@');
   let host: string;
   let rawPath: string;
 
@@ -89,7 +90,7 @@ export function canonicalRepoIdentity(remoteUrl: string): string {
     try {
       parsed = new URL(trimmed);
     } catch (err) {
-      throw new InviteError('invalid-remote', `Unable to parse remoteUrl: ${trimmed}`, err);
+      throw new InviteError('invalid-remote', `Unable to parse remoteUrl: ${redact(trimmed)}`, err);
     }
     host = parsed.hostname; // already strips port and credentials
     rawPath = parsed.pathname;
@@ -99,7 +100,7 @@ export function canonicalRepoIdentity(remoteUrl: string): string {
     if (!match) {
       throw new InviteError(
         'invalid-remote',
-        `remoteUrl has no discernible host or scheme: ${trimmed}`,
+        `remoteUrl has no discernible host or scheme: ${redact(trimmed)}`,
       );
     }
     host = match[1] as string;
@@ -107,7 +108,7 @@ export function canonicalRepoIdentity(remoteUrl: string): string {
   }
 
   if (!host) {
-    throw new InviteError('invalid-remote', `No host found in remoteUrl: ${trimmed}`);
+    throw new InviteError('invalid-remote', `No host found in remoteUrl: ${redact(trimmed)}`);
   }
 
   // Normalise path: strip leading slash, trailing slash, trailing .git.
@@ -117,7 +118,10 @@ export function canonicalRepoIdentity(remoteUrl: string): string {
     .replace(/\.git$/, '');
 
   if (!path) {
-    throw new InviteError('invalid-remote', `No repository path found in remoteUrl: ${trimmed}`);
+    throw new InviteError(
+      'invalid-remote',
+      `No repository path found in remoteUrl: ${redact(trimmed)}`,
+    );
   }
 
   return `${host.toLowerCase()}/${path.toLowerCase()}`;
@@ -133,21 +137,27 @@ export function canonicalRepoIdentity(remoteUrl: string): string {
  *
  * Algorithm:
  * 1. Canonicalise the remote URL via {@link canonicalRepoIdentity}.
- * 2. Compute SHA-256 of `"${canonical}|${branch}|${token}"` (UTF-8).
- *    The `|` separator is safe — it is not valid in hostnames or git ref names
- *    (slashes are, but we do not use `/` as a separator here intentionally).
+ * 2. Compute SHA-256 of a length-prefixed encoding of each field:
+ *    `"${canonical.length}:${canonical}|${branch.length}:${branch}|${token.length}:${token}"`.
+ *    Length-prefixing guarantees unique encoding — two distinct inputs can never
+ *    produce the same string regardless of whether field values contain `|` or
+ *    `:` characters.
  * 3. Encode the digest as base64url (unpadded) and take the first 22 chars.
  *
  * **Why 22 chars?** A full SHA-256 base64url digest is 43 chars. The first 22
  * chars encode ≈ 132 bits (22 × 6 bits), which is well above the 128-bit
- * threshold recommended for routing keys. The session ID is a *public* key;
- * the security secret is the token, so this length is sufficient.
+ * threshold recommended for routing keys.
+ *
+ * The returned session ID is a **public routing key** — it is safe to share,
+ * log, or include in URLs. The security of the session depends entirely on the
+ * unguessability of `token`.
  *
  * The result is stable across processes and platforms.
  *
- * @throws {@link InviteError} `'invalid-branch'` if `branch` is empty or
- *   whitespace-only.
- * @throws {@link InviteError} `'invalid-token'` if `token` is empty.
+ * @throws {@link InviteError} `'invalid-branch'` if `branch` is empty,
+ *   has leading/trailing whitespace, or exceeds 1 024 chars.
+ * @throws {@link InviteError} `'invalid-token'` if `token` is empty or
+ *   exceeds 1 024 chars.
  * @throws {@link InviteError} `'invalid-remote'` via
  *   {@link canonicalRepoIdentity}.
  */
@@ -160,15 +170,24 @@ export function deriveSessionId({
   branch: string;
   token: string;
 }): string {
-  if (!branch || branch.trim().length === 0) {
-    throw new InviteError('invalid-branch', 'branch must not be empty or whitespace-only');
+  if (branch.length === 0 || branch !== branch.trim()) {
+    throw new InviteError(
+      'invalid-branch',
+      'branch must not be empty or have surrounding whitespace',
+    );
   }
   if (!token) {
     throw new InviteError('invalid-token', 'token must not be empty');
   }
+  if (branch.length > 1024) {
+    throw new InviteError('invalid-branch', 'branch exceeds maximum length of 1024 chars');
+  }
+  if (token.length > 1024) {
+    throw new InviteError('invalid-token', 'token exceeds maximum length of 1024 chars');
+  }
 
   const canonical = canonicalRepoIdentity(remoteUrl);
-  const input = `${canonical}|${branch}|${token}`;
+  const input = `${canonical.length}:${canonical}|${branch.length}:${branch}|${token.length}:${token}`;
   const digest = createHash('sha256').update(input, 'utf8').digest();
   return Buffer.from(digest).toString('base64url').slice(0, 22);
 }
@@ -308,7 +327,7 @@ export function parseInviteLink(url: string): {
 
   const sessionId = rawS;
   const token = rawT;
-  const branch = decodeURIComponent(rawB);
+  const branch = rawB;
 
   if (!sessionId) {
     throw new InviteError('invalid-input', 'Query param "s" (sessionId) must not be empty');

@@ -96,6 +96,12 @@ describe('canonicalRepoIdentity', () => {
     expect(() => canonicalRepoIdentity(long)).toThrow(InviteError);
     expect(captureInviteError(() => canonicalRepoIdentity(long)).code).toBe('invalid-remote');
   });
+
+  it('does not leak credentials in error messages', () => {
+    // A URL with credentials but no path — throws 'invalid-remote' for missing path.
+    const err = captureInviteError(() => canonicalRepoIdentity('https://user:secret@github.com/'));
+    expect(err.message).not.toContain('secret');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -161,6 +167,46 @@ describe('deriveSessionId', () => {
     expect(captureInviteError(() => deriveSessionId({ ...base, token: '' })).code).toBe(
       'invalid-token',
     );
+  });
+
+  it('does not collide when separator chars appear in branch or token', () => {
+    const remote = 'https://github.com/foo/bar.git';
+    const a = deriveSessionId({ remoteUrl: remote, branch: 'a|b', token: 'c' });
+    const b = deriveSessionId({ remoteUrl: remote, branch: 'a', token: 'b|c' });
+    expect(a).not.toBe(b);
+  });
+
+  it('rejects branch longer than 1024 chars', () => {
+    const err = captureInviteError(() =>
+      deriveSessionId({
+        remoteUrl: 'https://github.com/foo/bar.git',
+        branch: 'a'.repeat(1025),
+        token: 'validtoken',
+      }),
+    );
+    expect(err.code).toBe('invalid-branch');
+  });
+
+  it('rejects token longer than 1024 chars', () => {
+    const err = captureInviteError(() =>
+      deriveSessionId({
+        remoteUrl: 'https://github.com/foo/bar.git',
+        branch: 'main',
+        token: 'a'.repeat(1025),
+      }),
+    );
+    expect(err.code).toBe('invalid-token');
+  });
+
+  it('rejects branches with leading/trailing whitespace', () => {
+    const err = captureInviteError(() =>
+      deriveSessionId({
+        remoteUrl: 'https://github.com/foo/bar.git',
+        branch: ' main',
+        token: 'validtoken',
+      }),
+    );
+    expect(err.code).toBe('invalid-branch');
   });
 });
 
@@ -234,6 +280,33 @@ describe('formatInviteLink / parseInviteLink', () => {
 
   it('throws invalid-input when branch is empty', () => {
     expect(() => formatInviteLink({ sessionId, token, branch: '' })).toThrow(InviteError);
+  });
+
+  it('throws invalid-input when sessionId contains invalid chars', () => {
+    const err = captureInviteError(() =>
+      formatInviteLink({ sessionId: 'abc!def', token: 'validtoken123', branch: 'main' }),
+    );
+    expect(err.code).toBe('invalid-input');
+  });
+
+  it('throws invalid-input when token contains invalid chars', () => {
+    const err = captureInviteError(() =>
+      formatInviteLink({ sessionId: 'validsession123', token: 'abc!def', branch: 'main' }),
+    );
+    expect(err.code).toBe('invalid-input');
+  });
+
+  it("round-trips a branch containing '%'", () => {
+    const sessionId = deriveSessionId({
+      remoteUrl: 'https://github.com/foo/bar.git',
+      branch: 'main',
+      token: generateInviteToken(),
+    });
+    const token = generateInviteToken();
+    const branch = '100%done';
+    const url = formatInviteLink({ sessionId, token, branch });
+    const parsed = parseInviteLink(url);
+    expect(parsed.branch).toBe(branch);
   });
 });
 
