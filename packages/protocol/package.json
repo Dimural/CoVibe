@@ -25,6 +25,10 @@
     "./session": {
       "types": "./dist/session.d.ts",
       "default": "./dist/session.js"
+    },
+    "./ot": {
+      "types": "./dist/ot.d.ts",
+      "default": "./dist/ot.js"
     }
   },
   "files": [
@@ -39,10 +43,12 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "ot-text-unicode": "^4.0.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "fast-check": "^3.22.0",
     "typescript": "^5.5.0",
     "vitest": "^2.1.0",
     "rimraf": "^6.0.0",

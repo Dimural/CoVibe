@@ -1,5 +1,18 @@
 export { PROTOCOL_VERSION, type ProtocolVersion } from './version.js';
 export {
+  applyOp,
+  composeOps,
+  transformOp,
+  transformPosition,
+  normalizeOp,
+  NOOP,
+  apply,
+  compose,
+  transform,
+  type TextOp,
+  type TextOpComponent,
+} from './ot.js';
+export {
   EnvelopeSchema,
   ProtocolError,
   parseEnvelope,
