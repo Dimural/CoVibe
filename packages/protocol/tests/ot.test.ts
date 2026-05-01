@@ -175,6 +175,20 @@ describe('composeOps', () => {
   });
 });
 
+describe('normalizeOp', () => {
+  it('merges adjacent skips and strips trailing skip', () => {
+    expect(normalizeOp([1, 1])).toStrictEqual([]);
+  });
+
+  it('merges adjacent inserts', () => {
+    expect(normalizeOp(['a', 'b'])).toStrictEqual(['ab']);
+  });
+
+  it('leaves a canonical op unchanged', () => {
+    expect(normalizeOp([1, 'x'])).toStrictEqual([1, 'x']);
+  });
+});
+
 describe('transformOp', () => {
   it('transforms two concurrent inserts at the same position with right-side tie-break', () => {
     // Both clients start from "" and insert at position 0:
@@ -299,7 +313,7 @@ describe('Property 1 — TP1 convergence', () => {
         ([s, a, b]) => {
           const leftResult = applyOp(applyOp(s, a), transformOp(b, a, 'right'));
           const rightResult = applyOp(applyOp(s, b), transformOp(a, b, 'left'));
-          return leftResult === rightResult;
+          expect(leftResult).toBe(rightResult);
         },
       ),
       { numRuns: 1000 },
@@ -332,7 +346,7 @@ describe('Property 2 — compose correctness', () => {
         ([s, a, b]) => {
           const sequential = applyOp(applyOp(s, a), b);
           const composed = applyOp(s, composeOps(a, b));
-          return sequential === composed;
+          expect(sequential).toBe(composed);
         },
       ),
       { numRuns: 1000 },
@@ -376,7 +390,7 @@ describe('Property 3 — transformPosition consistency', () => {
           // Library behavior: cursor strictly AFTER insertAt shifts by insertLen;
           // cursor AT or BEFORE insertAt stays unchanged.
           const expected = cursor > insertAt ? cursor + insertLen : cursor;
-          return newCursor === expected;
+          expect(newCursor).toBe(expected);
         },
       ),
       { numRuns: 1000 },
@@ -424,7 +438,7 @@ describe('Property 3 — transformPosition consistency', () => {
           } else {
             expected = cursor - delCount;
           }
-          return newCursor === expected;
+          expect(newCursor).toBe(expected);
         },
       ),
       { numRuns: 1000 },

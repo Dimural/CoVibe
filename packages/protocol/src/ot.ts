@@ -33,14 +33,14 @@ export const composeOps: (op1: TextOp, op2: TextOp) => TextOp = otType.compose.b
 /**
  * Transform `op` against the concurrent `otherOp`.
  *
- * `side` determines tie-breaking when both ops insert at the same position:
- * - `'left'`  — this op's insertion is treated as having occurred first.
- * - `'right'` — this op's insertion is treated as having occurred second.
+ * Tie-breaking semantics:
+ * - `side='left'`: `op` is treated as having occurred FIRST (this op wins tie-breaks).
+ * - `side='right'`: `op` is treated as having occurred SECOND (`otherOp` wins tie-breaks).
  *
- * For server-ordered (Jupiter-style) OT: the client transforms against an
- * acknowledged server op using `side='left'` (server wins tie-breaks), and
- * the server transforms against pending client ops using `side='right'`.
- * Always be explicit about which side you're transforming from.
+ * For server-ordered (Jupiter-style) OT: the **client** transforms its pending
+ * op against the acknowledged server op using `side='right'` (server wins
+ * tie-breaks); the **server** transforms its op against pending client ops
+ * using `side='left'` (server confirms priority).
  *
  * TP1 guarantee: given two concurrent ops `a` and `b` applied to the same
  * snapshot `s`:
@@ -57,14 +57,14 @@ export const transformOp: (op: TextOp, otherOp: TextOp, side: 'left' | 'right') 
  *
  * Returns the new codepoint position that `pos` maps to after `op` is applied.
  * Note: the underlying `ot-text-unicode` `transformPosition` does not accept
- * a side parameter — it always positions the cursor after any insertion at the
+ * a side parameter — it always positions the cursor before any insertion at the
  * same position.
  */
 export const transformPosition: (pos: number, op: TextOp) => number =
   otType.transformPosition.bind(otType);
 
-/** Identity op — a no-op that leaves any snapshot unchanged. */
-export const NOOP: TextOp = [] as TextOp;
+/** Identity op (frozen array — safe to share) — a no-op that leaves any snapshot unchanged. */
+export const NOOP: TextOp = Object.freeze([]) as unknown as TextOp;
 
 /**
  * Normalize an op into canonical form by merging adjacent components of the

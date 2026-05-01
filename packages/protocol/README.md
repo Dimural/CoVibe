@@ -14,3 +14,4 @@ Clients **MUST** reject envelopes whose `v` field does not equal `PROTOCOL_VERSI
 - `./envelope` — Wire envelope type
 - `./messages` — Message type definitions
 - `./session` — Session-related types
+- `./ot` — OT primitives (`applyOp`, `composeOps`, `transformOp`, `transformPosition`, `normalizeOp`, `NOOP`)
