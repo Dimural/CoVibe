@@ -21,6 +21,10 @@
     "./messages": {
       "types": "./dist/messages/index.d.ts",
       "default": "./dist/messages/index.js"
+    },
+    "./session": {
+      "types": "./dist/session.d.ts",
+      "default": "./dist/session.js"
     }
   },
   "files": [

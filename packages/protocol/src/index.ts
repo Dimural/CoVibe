@@ -14,3 +14,12 @@ export {
   type AnyDecodedMessage,
 } from './codec.js';
 export * from './messages/index.js';
+export {
+  canonicalRepoIdentity,
+  deriveSessionId,
+  generateInviteToken,
+  formatInviteLink,
+  parseInviteLink,
+  InviteError,
+  type InviteErrorCode,
+} from './session.js';
