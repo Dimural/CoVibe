@@ -2,7 +2,8 @@ import type { Socket } from 'node:net';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import WebSocket from 'ws';
 import { loadConfig } from '../src/config.js';
-import { InMemoryAuthorizer } from '../src/auth.memory.js';
+import { MemorySessionStore } from '../src/sessionStore.memory.js';
+import { SessionRegistryImpl } from '../src/sessionRegistry.impl.js';
 import { CloseCodes } from '../src/closeCodes.js';
 import { withRelay } from './helpers/withRelay.js';
 
@@ -65,15 +66,16 @@ async function connectAndWaitClose(
   });
 }
 
-/** Create an authorizer with the test config. */
-function makeAuthorizer(maxParticipants = 4): InMemoryAuthorizer {
+/** Create a registry-backed authorizer with the test config. */
+function makeAuthorizer(maxParticipants = 4): SessionRegistryImpl {
   const config = loadConfig({
     PORT: '0',
     NODE_ENV: 'test',
     LOG_LEVEL: 'fatal',
     MAX_PARTICIPANTS: String(maxParticipants),
   });
-  return new InMemoryAuthorizer({ config });
+  const store = new MemorySessionStore();
+  return new SessionRegistryImpl({ store, config });
 }
 
 // ---------------------------------------------------------------------------
@@ -166,7 +168,7 @@ describe('connection lifecycle', () => {
 
     it('10. timing-safe compare smoke: wrong-token regardless of differing character position', async () => {
       const config = loadConfig({ PORT: '0', NODE_ENV: 'test', LOG_LEVEL: 'fatal' });
-      const auth = new InMemoryAuthorizer({ config });
+      const auth = new SessionRegistryImpl({ store: new MemorySessionStore(), config });
       const base = {
         sessionId: 'sess1',
         token: 'AAAA',
@@ -194,7 +196,7 @@ describe('connection lifecycle', () => {
 
     it('11. resume path — same participantId re-joins → admitted, same id returned', async () => {
       const config = loadConfig({ PORT: '0', NODE_ENV: 'test', LOG_LEVEL: 'fatal' });
-      const auth = new InMemoryAuthorizer({ config });
+      const auth = new SessionRegistryImpl({ store: new MemorySessionStore(), config });
       const base = {
         sessionId: 'sess-resume',
         token: 'tok',
@@ -212,14 +214,14 @@ describe('connection lifecycle', () => {
 
       // Re-join with same participantId — note: since we released, the session
       // may still exist if other participants are present; here it was the only one,
-      // so session was deleted. The resume path for an existing session is tested
-      // directly on the authorizer.
-      const auth2 = new InMemoryAuthorizer({ config });
+      // so session was deleted after grace. The resume path for an existing
+      // session is tested directly on the authorizer.
+      const auth2 = new SessionRegistryImpl({ store: new MemorySessionStore(), config });
       const r2 = await auth2.authorize(base);
       expect(r2.kind).toBe('admitted');
       const pid2 = (r2 as { kind: 'admitted'; participantId: string }).participantId;
 
-      // Same participantId re-joins (session still active).
+      // Same participantId re-joins (session still active within grace).
       const r3 = await auth2.authorize({ ...base, participantId: pid2, displayName: 'B' });
       expect(r3).toEqual({ kind: 'admitted', participantId: pid2 });
     });

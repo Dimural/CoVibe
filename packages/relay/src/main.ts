@@ -2,6 +2,9 @@ import { Redis as IORedis } from 'ioredis';
 import { loadConfig } from './config.js';
 import { createLogger } from './log.js';
 import { RelayServer } from './server.js';
+import { MemorySessionStore } from './sessionStore.memory.js';
+import { RedisSessionStore } from './sessionStore.redis.js';
+import { SessionRegistryImpl } from './sessionRegistry.impl.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -10,9 +13,13 @@ async function main(): Promise<void> {
   const redis = config.redisUrl ? new IORedis(config.redisUrl, { lazyConnect: true }) : undefined;
   if (redis) await redis.connect();
 
+  const store = redis ? new RedisSessionStore(redis) : new MemorySessionStore();
+  const registry = new SessionRegistryImpl({ store, config, logger });
+
   const server = new RelayServer({
     config,
     logger,
+    authorizer: registry,
     ...(redis !== undefined ? { redis } : {}),
   });
 
