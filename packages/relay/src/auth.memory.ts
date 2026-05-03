@@ -45,6 +45,9 @@ export class InMemoryAuthorizer implements SessionAuthorizer {
     const tokenHash = sha256(req.token);
     const existing = this.#sessions.get(req.sessionId);
 
+    // Session IDs are public routing keys (see @covibes/protocol/session.ts).
+    // Timing leakage on this branch does not compromise security since the
+    // secret is the token, not the session ID.
     if (!existing) {
       // First joiner: establish the session and set the canonical token hash.
       const participantId = req.participantId ?? randomUUID();

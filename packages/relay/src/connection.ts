@@ -94,6 +94,10 @@ export class Connection {
   close(code: number, reason: string): void {
     if (this.#closed) return;
     this.#closed = true;
+    if (this.#heartbeatTimer !== null) {
+      clearInterval(this.#heartbeatTimer);
+      this.#heartbeatTimer = null;
+    }
     this.#logger.debug({ code, reason }, 'connection closing');
     this.#socket.close(code, reason);
   }
@@ -104,7 +108,7 @@ export class Connection {
    * Calling `start()` more than once is a no-op (guarded by a flag).
    */
   start(): void {
-    if (this.#started) return;
+    if (this.#started || this.#closed) return;
     this.#started = true;
 
     this.#socket.on('pong', this.#onPong);
@@ -116,7 +120,7 @@ export class Connection {
   // ----- private handlers (arrow functions to bind `this`) -----
 
   readonly #tick = (): void => {
-    if (this.#pendingPongs > this.#heartbeatMissesAllowed) {
+    if (this.#pendingPongs >= this.#heartbeatMissesAllowed) {
       this.#logger.warn(
         { pendingPongs: this.#pendingPongs, allowed: this.#heartbeatMissesAllowed },
         'heartbeat timeout — dropping connection',

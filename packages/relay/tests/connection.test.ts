@@ -346,6 +346,8 @@ describe('connection lifecycle', () => {
         async ({ baseUrl }) => {
           const url = `${baseUrl}?${qs(defaultParams())}`;
 
+          const startTime = Date.now();
+
           // Wait for the close event before opening, to avoid race.
           const closeResult = await new Promise<{ code: number; reason: string }>(
             (resolve, reject) => {
@@ -381,9 +383,18 @@ describe('connection lifecycle', () => {
             },
           );
 
+          const elapsed = Date.now() - startTime;
+
           // After MISSES+1 intervals the server should have dropped the connection.
           // We wait for the close event above, which fires naturally.
           expect(closeResult.code).toBe(CloseCodes.PingTimeout);
+
+          // With heartbeatMissesAllowed=MISSES and >=, the server closes on tick MISSES+1
+          // (after exactly MISSES missed pongs). elapsed should be ≈ (MISSES+1)*INTERVAL.
+          // With the off-by-one bug (>), close fires one tick later at (MISSES+2)*INTERVAL,
+          // which would violate the upper bound below.
+          expect(elapsed).toBeGreaterThanOrEqual(INTERVAL * MISSES - 5); // small jitter slack
+          expect(elapsed).toBeLessThan(INTERVAL * (MISSES + 2)); // bug fires at (MISSES+2)*INTERVAL, violating this
         },
       );
     }, 5000);

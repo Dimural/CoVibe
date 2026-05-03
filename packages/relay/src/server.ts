@@ -164,6 +164,10 @@ export class RelayServer {
       // Close the WS server first (terminates all WS connections) then close
       // the underlying HTTP server.
       wss?.close(() => {
+        // Force-terminate any remaining WS clients so HTTP server can close cleanly.
+        for (const client of wss.clients) {
+          client.terminate();
+        }
         server.close((err) => {
           clearTimeout(forceTimer);
           if (err) {
@@ -211,6 +215,7 @@ export class RelayServer {
     if (!parsed.success) {
       // Per WS spec, close codes are only valid AFTER a successful upgrade handshake.
       // Complete the upgrade then immediately close with 4400.
+      this.#logger.debug({ path: urlPath, reason: 'invalid-input' }, 'upgrade rejected');
       wss.handleUpgrade(req, socket, head, (ws) => {
         ws.close(CloseCodes.InvalidInput, 'invalid-input');
         ws.terminate();
@@ -222,6 +227,7 @@ export class RelayServer {
 
     if (!this.#authorizer) {
       // No authorizer configured — close with internal error.
+      this.#logger.error({ reason: 'no-authorizer' }, 'upgrade rejected');
       wss.handleUpgrade(req, socket, head, (ws) => {
         ws.close(CloseCodes.InternalError, 'no-authorizer');
         ws.terminate();
@@ -240,7 +246,7 @@ export class RelayServer {
         branch,
       });
     } catch (err: unknown) {
-      this.#logger.error({ err }, 'authorizer threw during upgrade');
+      this.#logger.error({ err, reason: 'authorizer-threw' }, 'upgrade rejected');
       wss.handleUpgrade(req, socket, head, (ws) => {
         ws.close(CloseCodes.InternalError, 'internal-error');
         ws.terminate();
@@ -256,6 +262,7 @@ export class RelayServer {
             ? CloseCodes.Unauthorized
             : CloseCodes.InvalidInput;
 
+      this.#logger.warn({ sessionId: session, reason: authResult.reason }, 'upgrade rejected');
       wss.handleUpgrade(req, socket, head, (ws) => {
         ws.close(code, authResult.reason);
         ws.terminate();
@@ -264,6 +271,8 @@ export class RelayServer {
     }
 
     // Admitted — complete upgrade and create Connection.
+    // noServer mode: we use the ws callback directly. No listeners are attached
+    // to wss, so wss.emit('connection', ws) would be a no-op.
     const { participantId: assignedParticipantId } = authResult;
     wss.handleUpgrade(req, socket, head, (ws) => {
       const connLogger = this.#logger.child({
