@@ -93,6 +93,10 @@ async function readBoth(
 export class RedisSessionStore implements SessionStore {
   readonly #redis: Redis;
 
+  // NOTE: ioredis enableAutoPipelining must remain false (the default).
+  // Enabling it can batch WATCH commands across concurrent update() calls,
+  // silently breaking optimistic concurrency. Do not change without a
+  // thorough audit of the WATCH/MULTI loop below.
   constructor(redis: Redis) {
     this.#redis = redis;
   }

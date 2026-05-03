@@ -10,7 +10,7 @@ function makeSession(id = 'session-1'): StoredSession {
   return {
     sessionId: id,
     branch: 'main',
-    tokenHash: Buffer.from('deadbeef'.repeat(4), 'hex'), // 16 bytes
+    tokenHash: Buffer.from('deadbeef'.repeat(8), 'hex'), // 32 bytes (SHA-256 size)
     participants: new Map([['p1', { displayName: 'Alice', color: '#ff0000', active: true }]]),
     activeCount: 1,
     expiryTimestamp: null,

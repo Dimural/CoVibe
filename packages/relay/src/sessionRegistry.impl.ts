@@ -150,8 +150,6 @@ export class SessionRegistryImpl implements SessionRegistry {
       | { kind: 'rejected'; reason: 'session-full' | 'wrong-token' | 'invalid-input' };
 
     const outcome = await this.#store.update<TransformResult>(req.sessionId, (current) => {
-      const now = this.#now();
-
       if (current === null) {
         // First joiner: create the session.
         const participantId = req.participantId ?? randomUUID();
@@ -214,7 +212,6 @@ export class SessionRegistryImpl implements SessionRegistry {
       current.expiryTimestamp = null;
 
       const next: StoredSession = { ...current };
-      void now; // used via closure in expiry check below
       return { next, result: { kind: 'admitted', participantId, session: next } };
     });
 
@@ -291,7 +288,9 @@ export class SessionRegistryImpl implements SessionRegistry {
 
     const timer = this.#setTimeout(() => {
       this.#graceTimers.delete(sessionId);
-      void this.#expireSession(sessionId);
+      this.#expireSession(sessionId).catch((err: unknown) => {
+        this.#logger?.error({ sessionId, err }, 'failed to expire session after grace');
+      });
     }, this.#sessionGraceMs);
 
     this.#graceTimers.set(sessionId, timer);
@@ -306,19 +305,23 @@ export class SessionRegistryImpl implements SessionRegistry {
   }
 
   async #expireSession(sessionId: string): Promise<void> {
-    // Guard: re-read to check activeCount before deleting. A concurrent join on
-    // another node (or late rejoin on this node) may have revived the session.
-    const current = await this.#store.read(sessionId);
-    if (current === null) return; // Already gone.
-    if (current.activeCount > 0) {
-      // Session was revived; do not delete.
+    const deleted = await this.#store.update<boolean>(sessionId, (current) => {
+      if (current === null) {
+        return { next: null, result: false };
+      }
+      if (current.activeCount > 0) {
+        // Session was revived during the grace period — leave it alone.
+        return { next: current, result: false };
+      }
+      return { next: null, result: true };
+    });
+    if (deleted) {
+      this.#logger?.debug({ sessionId }, 'session expired after grace period');
+    } else {
       this.#logger?.debug(
         { sessionId },
-        'grace timer fired but session is active; skipping delete',
+        'grace timer fired but session is active or already gone; skipping delete',
       );
-      return;
     }
-    await this.#store.delete(sessionId);
-    this.#logger?.debug({ sessionId }, 'session expired after grace period');
   }
 }

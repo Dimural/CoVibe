@@ -18,23 +18,23 @@ import type { SessionAuthorizer, AuthorizeRequest } from './auth.js';
 
 /** Public view of a participant, safe to return to the server layer. */
 export interface ParticipantView {
-  participantId: string;
-  displayName: string;
-  color: string;
+  readonly participantId: string;
+  readonly displayName: string;
+  readonly color: string;
   /** True once the participant has actively connected (admitted via authorize). */
-  active: boolean;
+  readonly active: boolean;
 }
 
 /** Public view of a session, safe to return to the server layer. */
 export interface SessionView {
-  sessionId: string;
-  branch: string;
-  participants: readonly ParticipantView[];
+  readonly sessionId: string;
+  readonly branch: string;
+  readonly participants: readonly ParticipantView[];
   /**
    * Wall-clock timestamp (ms since epoch) at which the session expires if no
    * participant is connected. Null if at least one participant is active.
    */
-  expiresAt: number | null;
+  readonly expiresAt: number | null;
 }
 
 /** Outcome of a `joinOrCreate` call. */
