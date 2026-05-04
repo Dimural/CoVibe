@@ -20,7 +20,7 @@ export const EnvelopeSchema = z
     ts: z.number().int().nonnegative(),
     type: z.string(),
     payload: z.unknown(),
-    /** Set by the relay on routed messages; identifies the sender. Absent on server-originated messages. */
+    /** Set by the relay before forwarding. 64 chars accommodates UUIDs (36), base64url-22, or any reasonably short participant ID format. */
     from: z.string().min(1).max(64).optional(),
   })
   .strict();

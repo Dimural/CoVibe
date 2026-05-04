@@ -297,7 +297,7 @@ describe('backpressure', () => {
       }
 
       const close = await b.expectClose(2000);
-      expect(close.code).toBe(4413);
+      expect(close.code).toBe(4430);
     } finally {
       await ctx.stop();
     }
@@ -481,7 +481,29 @@ describe('binary frame', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 12. Stats counters
+// 12. stop() with open WebSocket client (regression: wss.close() in noServer mode deadlock)
+// ---------------------------------------------------------------------------
+
+describe('server stop() with open client', () => {
+  it('resolves within 1s even when a WebSocket client is still connected', async () => {
+    const ctx = await setup();
+    const client = await connect(ctx.baseUrl, ctx.sessionId, ctx.token, 'Alice');
+    await client.recv((m) => m.type === 'session.state');
+
+    // stop() must not hang — it should resolve well within 1 second
+    await expect(
+      Promise.race([
+        ctx.stop(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('stop() timed out after 1s')), 1000),
+        ),
+      ]),
+    ).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 13. Stats counters
 // ---------------------------------------------------------------------------
 
 describe('router stats', () => {

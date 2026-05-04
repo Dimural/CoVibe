@@ -146,6 +146,11 @@ export async function connectClient(opts: ConnectClientOpts): Promise<RelayClien
     },
 
     expectNoMessage(durationMs: number): Promise<void> {
+      if (received.length > 0) {
+        return Promise.reject(
+          new Error(`expectNoMessage: ${received.length} message(s) already buffered`),
+        );
+      }
       return new Promise<void>((resolve, reject) => {
         const onMsg = (): void => {
           clearTimeout(timer);
@@ -164,7 +169,7 @@ export async function connectClient(opts: ConnectClientOpts): Promise<RelayClien
 
     close(): Promise<void> {
       return new Promise<void>((resolve) => {
-        if (ws.readyState === WebSocket.CLOSED) {
+        if (ws.readyState !== WebSocket.OPEN) {
           resolve();
           return;
         }

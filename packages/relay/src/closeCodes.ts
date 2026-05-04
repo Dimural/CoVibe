@@ -11,12 +11,14 @@ export const CloseCodes = {
   Forbidden: 4403,
   /** Missed too many pongs — connection considered dead. */
   PingTimeout: 4408,
-  /** Send buffer exceeded backpressure threshold, or incoming message too large. */
+  /** Incoming message exceeded the maximum allowed size (sender's fault). */
   MessageTooLarge: 4413,
   /** Reserved for protocol-version negotiation. */
   ProtocolMismatch: 4426,
   /** Session capacity exceeded. */
   SessionFull: 4429,
+  /** Outbound send buffer exceeded backpressure threshold — peer is too slow to read. */
+  SlowConsumer: 4430,
   /** Server-side bug. */
   InternalError: 4500,
 } as const;

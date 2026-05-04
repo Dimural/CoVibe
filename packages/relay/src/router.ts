@@ -14,7 +14,7 @@
  */
 
 import { ProtocolError, decode, encode } from '@covibes/protocol';
-import type { AnyDecodedMessage, MessageType, MessagePayload } from '@covibes/protocol';
+import type { AnyDecodedMessage, Envelope, MessageType, MessagePayload } from '@covibes/protocol';
 import { CloseCodes } from './closeCodes.js';
 import type { Connection } from './connection.js';
 import type { Logger } from './log.js';
@@ -273,7 +273,7 @@ export class Router {
     // Step 3: type routing decision.
     if (ROUTABLE_TYPES.has(type)) {
       // Forward to peers.
-      this.#forwardToPeers(senderConn, raw);
+      this.#forwardToPeers(senderConn, decoded.envelope);
       return;
     }
 
@@ -300,27 +300,13 @@ export class Router {
     );
   }
 
-  #forwardToPeers(senderConn: Connection, raw: string): void {
+  #forwardToPeers(senderConn: Connection, envelope: Envelope): void {
     const sessionMap = this.#sessions.get(senderConn.sessionId);
     if (!sessionMap) return;
 
-    // Parse and re-serialize with `from` injected.
-    // We parse the envelope, strip any client-supplied `from`, inject the relay-verified one.
-    let envelopeWithFrom: string;
-    try {
-      const obj = JSON.parse(raw) as Record<string, unknown>;
-      // Overwrite (or set) from — never trust the client's value.
-      obj['from'] = senderConn.participantId;
-      envelopeWithFrom = JSON.stringify(obj);
-    } catch {
-      // Should not happen since decode() already validated JSON.
-      this.#logger.error(
-        { participantId: senderConn.participantId },
-        're-parse failed after successful decode',
-      );
-      return;
-    }
-
+    // Re-serialize with `from` injected.
+    // Overwrite (or set) from — never trust the client's value.
+    const envelopeWithFrom = JSON.stringify({ ...envelope, from: senderConn.participantId });
     const byteLength = Buffer.byteLength(envelopeWithFrom, 'utf8');
 
     for (const [peerId, peerConn] of sessionMap) {
@@ -337,7 +323,7 @@ export class Router {
           },
           'peer backpressure threshold exceeded — closing peer',
         );
-        peerConn.close(CloseCodes.MessageTooLarge, 'backpressure');
+        peerConn.close(CloseCodes.SlowConsumer, 'backpressure');
         continue;
       }
 
