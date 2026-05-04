@@ -6,6 +6,7 @@ import type { Config } from './config.js';
 import type { Logger } from './log.js';
 import { loadConfig } from './config.js';
 import { createLogger } from './log.js';
+import { Metrics } from './metrics.js';
 import type { SessionAuthorizer } from './auth.js';
 import type { SessionRegistry, SessionView } from './sessionRegistry.js';
 import { Connection } from './connection.js';
@@ -26,6 +27,8 @@ export interface RelayServerDeps {
   /** Optional pre-built Router instance. If omitted and `registry` is provided, one is created automatically. */
   router?: Router;
   redis?: { ping: () => Promise<'PONG'> }; // structural; matches ioredis subset we need
+  /** Optional metrics instance. When provided, exposes /metrics and records counters. */
+  metrics?: Metrics;
   /** Milliseconds between server-issued ping frames. Defaults to 25000. */
   heartbeatIntervalMs?: number;
   /** Number of consecutive missed pongs before the connection is dropped. Defaults to 2. */
@@ -99,10 +102,27 @@ export function createRelay(options: Partial<RelayOptions>): RelayServer {
   return new RelayServer({ ...options, config, logger });
 }
 
+/**
+ * Strip IPv6-mapped IPv4 prefix from a remote address string.
+ *
+ * Node.js reports IPv4-mapped IPv6 addresses as `::ffff:x.x.x.x` when the
+ * server is listening on a dual-stack socket. This helper normalises them to
+ * plain IPv4.
+ *
+ * NOTE: when the relay runs behind a reverse proxy, `req.socket.remoteAddress`
+ * is the proxy address, not the end client. Trusting `X-Forwarded-For` is a
+ * security decision deferred to Phase 7.
+ */
+function stripIpv6Prefix(addr: string | undefined): string | undefined {
+  if (!addr) return undefined;
+  return addr.startsWith('::ffff:') ? addr.slice(7) : addr;
+}
+
 export class RelayServer {
   readonly #config: Config;
   readonly #logger: Logger;
   readonly #redis: RelayServerDeps['redis'];
+  readonly #metrics: Metrics | undefined;
   readonly #authorizer: SessionAuthorizer | undefined;
   readonly #registry: SessionRegistry | undefined;
   readonly #router: Router;
@@ -117,6 +137,7 @@ export class RelayServer {
     this.#config = deps.config;
     this.#logger = deps.logger;
     this.#redis = deps.redis;
+    this.#metrics = deps.metrics;
     this.#registry = deps.registry;
     // When a registry is provided it also implements SessionAuthorizer (authorize/release).
     this.#authorizer = deps.registry ?? deps.authorizer;
@@ -126,6 +147,7 @@ export class RelayServer {
       deps.router ??
       new Router({
         logger: deps.logger,
+        ...(deps.metrics !== undefined && { metrics: deps.metrics }),
         ...(deps.bufferedAmountThreshold !== undefined && {
           bufferedAmountThreshold: deps.bufferedAmountThreshold,
         }),
@@ -376,7 +398,10 @@ export class RelayServer {
         this.#router.sendSessionState(conn, sessionView);
       }
 
-      connLogger.info({ displayName: user, branch, color }, 'participant admitted');
+      connLogger.info(
+        { displayName: user, branch, color, remoteIp: stripIpv6Prefix(req.socket.remoteAddress) },
+        'participant admitted',
+      );
     });
   }
 
@@ -397,6 +422,25 @@ export class RelayServer {
         }
         // /readyz: check Redis if provided
         await this.#handleReadyz(res);
+        return;
+      }
+
+      if (url === '/metrics') {
+        if (method !== 'GET') {
+          res.setHeader('Allow', 'GET');
+          writeJson(res, 405, { error: 'method-not-allowed' });
+          return;
+        }
+        if (!this.#metrics) {
+          writeJson(res, 404, { error: 'not-found' });
+          return;
+        }
+        const body = await this.#metrics.render();
+        res.writeHead(200, {
+          'Content-Type': Metrics.contentType(),
+          'Content-Length': Buffer.byteLength(body),
+        });
+        res.end(body);
         return;
       }
 

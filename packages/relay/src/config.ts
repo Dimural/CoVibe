@@ -7,6 +7,8 @@ const ConfigSchema = z.object({
   maxParticipants: z.coerce.number().int().min(2).max(16).default(4),
   sessionGraceMs: z.coerce.number().int().min(0).default(1_800_000),
   nodeEnv: z.enum(['development', 'test', 'production']).default('development'),
+  /** Optional Sentry DSN — when set, Sentry is initialized at startup. */
+  sentryDsn: z.string().url().optional(),
 });
 
 export type Config = Readonly<z.infer<typeof ConfigSchema>>;
@@ -19,6 +21,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxParticipants: env.MAX_PARTICIPANTS,
     sessionGraceMs: env.SESSION_GRACE_MS,
     nodeEnv: env.NODE_ENV,
+    sentryDsn: env.SENTRY_DSN,
   });
   if (!parsed.success) {
     const issues = parsed.error.issues

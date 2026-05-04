@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { loadConfig } from '../src/config.js';
 import { createLogger } from '../src/log.js';
+import { Metrics } from '../src/metrics.js';
 import { RelayServer } from '../src/server.js';
 import type { RelayServerDeps } from '../src/server.js';
 
@@ -134,6 +135,36 @@ describe('GET /unknown', () => {
       expect(res.status).toBe(404);
       const body = (await res.json()) as { error: string };
       expect(body).toEqual({ error: 'not-found' });
+    });
+  });
+});
+
+describe('GET /metrics', () => {
+  it('returns 200 with prometheus content-type and relay body when metrics configured', async () => {
+    const metrics = new Metrics();
+    await withServer({ metrics }, async (_server, baseUrl) => {
+      const res = await fetch(`${baseUrl}/metrics`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toMatch(/text\/plain/);
+      expect(res.headers.get('content-type')).toMatch(/version=0\.0\.4/);
+      const text = await res.text();
+      expect(text).toMatch(/covibes_relay_/);
+    });
+  });
+
+  it('returns 404 when metrics not configured', async () => {
+    await withServer({}, async (_server, baseUrl) => {
+      const res = await fetch(`${baseUrl}/metrics`);
+      expect(res.status).toBe(404);
+    });
+  });
+
+  it('returns 405 for POST /metrics', async () => {
+    const metrics = new Metrics();
+    await withServer({ metrics }, async (_server, baseUrl) => {
+      const res = await fetch(`${baseUrl}/metrics`, { method: 'POST' });
+      expect(res.status).toBe(405);
+      expect(res.headers.get('allow')).toBe('GET');
     });
   });
 });

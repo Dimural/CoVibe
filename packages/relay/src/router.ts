@@ -18,6 +18,7 @@ import type { AnyDecodedMessage, Envelope, MessageType, MessagePayload } from '@
 import { CloseCodes } from './closeCodes.js';
 import type { Connection } from './connection.js';
 import type { Logger } from './log.js';
+import type { Metrics } from './metrics.js';
 import type { SessionView } from './sessionRegistry.js';
 
 /** Set of message types the Router will forward peer-to-peer. */
@@ -57,6 +58,8 @@ export interface RouterDeps {
   bufferedAmountThreshold?: number; // default 1_048_576 (1 MiB)
   /** Max raw message size (bytes) the router will accept. Larger → close 4413. */
   maxMessageBytes?: number; // default 1_048_576
+  /** Optional Prometheus metrics instance. When absent, no metrics are recorded. */
+  metrics?: Metrics;
 }
 
 /** Point-in-time routing counters. All values monotonically increase. */
@@ -83,6 +86,7 @@ export class Router {
   readonly #logger: Logger;
   readonly #bufferedAmountThreshold: number;
   readonly #maxMessageBytes: number;
+  readonly #metrics: Metrics | undefined;
 
   /**
    * Two-level map: sessionId → (participantId → Connection).
@@ -103,6 +107,7 @@ export class Router {
     this.#bufferedAmountThreshold =
       deps.bufferedAmountThreshold ?? DEFAULT_BUFFERED_AMOUNT_THRESHOLD;
     this.#maxMessageBytes = deps.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES;
+    this.#metrics = deps.metrics;
   }
 
   /**
@@ -239,6 +244,7 @@ export class Router {
     // Step 1: size check.
     if (byteLength > this.#maxMessageBytes) {
       this.#droppedForOversize++;
+      this.#metrics?.dropped_for_oversize_total.inc();
       this.#logger.warn(
         { byteLength, max: this.#maxMessageBytes, participantId: senderConn.participantId },
         'message exceeds max size — closing',
@@ -254,6 +260,7 @@ export class Router {
     } catch (err: unknown) {
       if (err instanceof ProtocolError) {
         this.#incrementErrorCode(err.code);
+        this.#metrics?.protocol_errors_total.inc({ code: err.code });
         if (err.code === 'version-mismatch') {
           // Can't send error back — client can't parse our response. Close hard.
           senderConn.close(CloseCodes.ProtocolMismatch, 'version-mismatch');
@@ -315,6 +322,7 @@ export class Router {
       // Backpressure check before forwarding.
       if (peerConn.bufferedAmount > this.#bufferedAmountThreshold) {
         this.#droppedForBackpressure++;
+        this.#metrics?.dropped_for_backpressure_total.inc();
         this.#logger.warn(
           {
             peerParticipantId: peerId,
@@ -330,6 +338,8 @@ export class Router {
       if (peerConn.send(envelopeWithFrom)) {
         this.#messagesRouted++;
         this.#bytesRouted += byteLength;
+        this.#metrics?.messages_routed_total.inc({ type: envelope.type });
+        this.#metrics?.bytes_routed_total.inc(byteLength);
       }
     }
   }
