@@ -28,19 +28,19 @@ export interface ConnectionDeps {
 }
 
 type CloseCallback = (code: number, reason: string) => void;
+type MessageCallback = (raw: string, byteLength: number) => void;
 
 /**
  * Encapsulates a single live WebSocket client connection.
  *
- * Responsibilities (Phase 2.2):
+ * Responsibilities (Phase 2.2 / Task 2.4):
  * - Store participant identity (sessionId, participantId, display name, color, branch).
  * - Run a heartbeat loop: ping every `heartbeatIntervalMs`; drop after
  *   `heartbeatMissesAllowed` consecutive missed pongs with code
  *   {@link CloseCodes.PingTimeout}.
  * - Provide a clean {@link close} method (idempotent, code+reason).
  * - Fire {@link onClose} callbacks when the socket closes for any reason.
- *
- * Message routing (Task 2.4) and metrics (Task 2.5) are out of scope here.
+ * - Deliver raw text frames to {@link onMessage} subscribers; reject binary frames.
  */
 export class Connection {
   /** Relay session this connection belongs to. */
@@ -59,6 +59,7 @@ export class Connection {
   readonly #heartbeatIntervalMs: number;
   readonly #heartbeatMissesAllowed: number;
   readonly #closeCallbacks: CloseCallback[] = [];
+  readonly #messageCallbacks: MessageCallback[] = [];
 
   #started = false;
   #closed = false;
@@ -88,6 +89,41 @@ export class Connection {
   }
 
   /**
+   * Register a callback to be invoked for each raw text frame received from
+   * the client. Binary frames are rejected with {@link CloseCodes.InvalidInput}
+   * before reaching any subscriber.
+   *
+   * Multiple subscribers are supported (e.g. for tests).
+   * Safe to call before or after {@link start}.
+   */
+  onMessage(cb: MessageCallback): void {
+    this.#messageCallbacks.push(cb);
+  }
+
+  /**
+   * The number of bytes queued in the underlying WebSocket send buffer.
+   * Used by the Router to detect backpressure.
+   */
+  get bufferedAmount(): number {
+    return this.#socket.bufferedAmount;
+  }
+
+  /**
+   * Send a raw string frame to this client.
+   * Returns false if the connection is already closed or in a non-OPEN state.
+   */
+  send(data: string): boolean {
+    if (this.#closed || this.#socket.readyState !== 1 /* OPEN */) return false;
+    try {
+      this.#socket.send(data);
+      return true;
+    } catch (err: unknown) {
+      this.#logger.debug({ err }, 'send failed');
+      return false;
+    }
+  }
+
+  /**
    * Close the underlying socket with a numeric code and reason string.
    * Idempotent — subsequent calls are no-ops.
    */
@@ -113,6 +149,7 @@ export class Connection {
 
     this.#socket.on('pong', this.#onPong);
     this.#socket.on('close', this.#onSocketClose);
+    this.#socket.on('message', this.#onSocketMessage);
 
     this.#heartbeatTimer = setInterval(this.#tick, this.#heartbeatIntervalMs);
   }
@@ -141,6 +178,23 @@ export class Connection {
     this.#pendingPongs = 0;
   };
 
+  readonly #onSocketMessage = (data: Buffer | string, isBinary: boolean): void => {
+    if (isBinary) {
+      this.#logger.debug('binary frame received — closing with InvalidInput');
+      this.close(CloseCodes.InvalidInput, 'binary-frame-not-allowed');
+      return;
+    }
+    const raw = typeof data === 'string' ? data : data.toString('utf8');
+    const byteLength = Buffer.byteLength(raw, 'utf8');
+    for (const cb of this.#messageCallbacks) {
+      try {
+        cb(raw, byteLength);
+      } catch (err: unknown) {
+        this.#logger.error({ err }, 'onMessage callback threw');
+      }
+    }
+  };
+
   readonly #onSocketClose = (code: number, reasonBuf: Buffer): void => {
     if (this.#heartbeatTimer !== null) {
       clearInterval(this.#heartbeatTimer);
@@ -149,6 +203,7 @@ export class Connection {
     // Remove our own listeners to prevent any double-firing.
     this.#socket.off('pong', this.#onPong);
     this.#socket.off('close', this.#onSocketClose);
+    this.#socket.off('message', this.#onSocketMessage);
 
     this.#closed = true;
     const reason = reasonBuf.toString('utf8');

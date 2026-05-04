@@ -7,19 +7,33 @@ import type { Logger } from './log.js';
 import { loadConfig } from './config.js';
 import { createLogger } from './log.js';
 import type { SessionAuthorizer } from './auth.js';
+import type { SessionRegistry, SessionView } from './sessionRegistry.js';
 import { Connection } from './connection.js';
 import { CloseCodes } from './closeCodes.js';
+import { Router } from './router.js';
 
 export interface RelayServerDeps {
   config: Config;
   logger: Logger;
   /** Optional authorizer; defaults to rejecting all connections when omitted (not useful in production). */
   authorizer?: SessionAuthorizer;
+  /**
+   * Optional session registry. When provided, the server will use `joinOrCreate`
+   * (which returns a full `SessionView`) and wire up the router to send `session.state`
+   * on admission. Takes precedence over `authorizer` when both are provided.
+   */
+  registry?: SessionRegistry;
+  /** Optional pre-built Router instance. If omitted and `registry` is provided, one is created automatically. */
+  router?: Router;
   redis?: { ping: () => Promise<'PONG'> }; // structural; matches ioredis subset we need
   /** Milliseconds between server-issued ping frames. Defaults to 25000. */
   heartbeatIntervalMs?: number;
   /** Number of consecutive missed pongs before the connection is dropped. Defaults to 2. */
   heartbeatMissesAllowed?: number;
+  /** Backpressure threshold in bytes for the router. Defaults to 1 MiB. */
+  bufferedAmountThreshold?: number;
+  /** Max message size in bytes for the router. Defaults to 1 MiB. */
+  maxMessageBytes?: number;
 }
 
 /**
@@ -90,6 +104,8 @@ export class RelayServer {
   readonly #logger: Logger;
   readonly #redis: RelayServerDeps['redis'];
   readonly #authorizer: SessionAuthorizer | undefined;
+  readonly #registry: SessionRegistry | undefined;
+  readonly #router: Router;
   readonly #heartbeatIntervalMs: number;
   readonly #heartbeatMissesAllowed: number;
   #server: http.Server | null = null;
@@ -101,9 +117,25 @@ export class RelayServer {
     this.#config = deps.config;
     this.#logger = deps.logger;
     this.#redis = deps.redis;
-    this.#authorizer = deps.authorizer;
+    this.#registry = deps.registry;
+    // When a registry is provided it also implements SessionAuthorizer (authorize/release).
+    this.#authorizer = deps.registry ?? deps.authorizer;
     this.#heartbeatIntervalMs = deps.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
     this.#heartbeatMissesAllowed = deps.heartbeatMissesAllowed ?? DEFAULT_HEARTBEAT_MISSES_ALLOWED;
+    this.#router =
+      deps.router ??
+      new Router({
+        logger: deps.logger,
+        ...(deps.bufferedAmountThreshold !== undefined && {
+          bufferedAmountThreshold: deps.bufferedAmountThreshold,
+        }),
+        ...(deps.maxMessageBytes !== undefined && { maxMessageBytes: deps.maxMessageBytes }),
+      });
+  }
+
+  /** Expose the router for tests and metrics (Task 2.5). */
+  get router(): Router {
+    return this.#router;
   }
 
   get listening(): boolean {
@@ -161,24 +193,24 @@ export class RelayServer {
         server.closeAllConnections?.();
       }, STOP_FORCE_TIMEOUT_MS);
 
-      // Close the WS server first (terminates all WS connections) then close
-      // the underlying HTTP server.
-      wss?.close(() => {
-        // Force-terminate any remaining WS clients so HTTP server can close cleanly.
+      // Terminate all open WS clients first; only then close the WS server
+      // so wss.close() fires its callback immediately (it waits for clients
+      // to disconnect before calling back when using noServer mode).
+      if (wss) {
         for (const client of wss.clients) {
           client.terminate();
         }
-        server.close((err) => {
-          clearTimeout(forceTimer);
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
+        wss.close(() => {
+          server.close((err) => {
+            clearTimeout(forceTimer);
+            if (err) {
+              reject(err);
+            } else {
+              resolve();
+            }
+          });
         });
-      });
-
-      if (!wss) {
+      } else {
         server.close((err) => {
           clearTimeout(forceTimer);
           if (err) {
@@ -235,45 +267,86 @@ export class RelayServer {
       return;
     }
 
-    let authResult;
-    try {
-      authResult = await this.#authorizer.authorize({
-        sessionId: session,
-        token,
-        ...(participantId !== undefined ? { participantId } : {}),
-        displayName: user,
-        color,
-        branch,
-      });
-    } catch (err: unknown) {
-      this.#logger.error({ err, reason: 'authorizer-threw' }, 'upgrade rejected');
-      wss.handleUpgrade(req, socket, head, (ws) => {
-        ws.close(CloseCodes.InternalError, 'internal-error');
-        ws.terminate();
-      });
-      return;
-    }
+    const authReq = {
+      sessionId: session,
+      token,
+      ...(participantId !== undefined ? { participantId } : {}),
+      displayName: user,
+      color,
+      branch,
+    };
 
-    if (authResult.kind === 'rejected') {
-      const code =
-        authResult.reason === 'session-full'
-          ? CloseCodes.SessionFull
-          : authResult.reason === 'wrong-token'
-            ? CloseCodes.Unauthorized
-            : CloseCodes.InvalidInput;
+    // Use joinOrCreate (registry path) when available — it returns a full SessionView
+    // needed for the session.state message. Fall back to authorize() for plain authorizers.
+    let assignedParticipantId: string;
+    let sessionView: SessionView | null = null;
 
-      this.#logger.warn({ sessionId: session, reason: authResult.reason }, 'upgrade rejected');
-      wss.handleUpgrade(req, socket, head, (ws) => {
-        ws.close(code, authResult.reason);
-        ws.terminate();
-      });
-      return;
+    if (this.#registry) {
+      let joinResult;
+      try {
+        joinResult = await this.#registry.joinOrCreate(authReq);
+      } catch (err: unknown) {
+        this.#logger.error({ err, reason: 'registry-threw' }, 'upgrade rejected');
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          ws.close(CloseCodes.InternalError, 'internal-error');
+          ws.terminate();
+        });
+        return;
+      }
+
+      if (joinResult.kind === 'rejected') {
+        const code =
+          joinResult.reason === 'session-full'
+            ? CloseCodes.SessionFull
+            : joinResult.reason === 'wrong-token'
+              ? CloseCodes.Unauthorized
+              : CloseCodes.InvalidInput;
+
+        this.#logger.warn({ sessionId: session, reason: joinResult.reason }, 'upgrade rejected');
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          ws.close(code, joinResult.reason);
+          ws.terminate();
+        });
+        return;
+      }
+
+      assignedParticipantId = joinResult.participantId;
+      sessionView = joinResult.view;
+    } else {
+      let authResult;
+      try {
+        authResult = await this.#authorizer.authorize(authReq);
+      } catch (err: unknown) {
+        this.#logger.error({ err, reason: 'authorizer-threw' }, 'upgrade rejected');
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          ws.close(CloseCodes.InternalError, 'internal-error');
+          ws.terminate();
+        });
+        return;
+      }
+
+      if (authResult.kind === 'rejected') {
+        const code =
+          authResult.reason === 'session-full'
+            ? CloseCodes.SessionFull
+            : authResult.reason === 'wrong-token'
+              ? CloseCodes.Unauthorized
+              : CloseCodes.InvalidInput;
+
+        this.#logger.warn({ sessionId: session, reason: authResult.reason }, 'upgrade rejected');
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          ws.close(code, authResult.reason);
+          ws.terminate();
+        });
+        return;
+      }
+
+      assignedParticipantId = authResult.participantId;
     }
 
     // Admitted — complete upgrade and create Connection.
     // noServer mode: we use the ws callback directly. No listeners are attached
     // to wss, so wss.emit('connection', ws) would be a no-op.
-    const { participantId: assignedParticipantId } = authResult;
     wss.handleUpgrade(req, socket, head, (ws) => {
       const connLogger = this.#logger.child({
         sessionId: session,
@@ -298,6 +371,10 @@ export class RelayServer {
       });
 
       conn.start();
+      this.#router.attach(conn);
+      if (sessionView !== null) {
+        this.#router.sendSessionState(conn, sessionView);
+      }
 
       connLogger.info({ displayName: user, branch, color }, 'participant admitted');
     });
