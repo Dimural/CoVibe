@@ -13,7 +13,7 @@ This is a pnpm monorepo. Planned package layout:
 ```
 packages/
   protocol/     Shared types and message schema for the relay protocol
-  relay/        WebSocket relay server
+  relay/        WebSocket relay server (HTTP + health endpoints; WS in subsequent tasks)
   extension/    VS Code extension (publisher client)
 e2e/            End-to-end tests
 ```

@@ -5,7 +5,14 @@
 import { z, type ZodError } from 'zod';
 import { PROTOCOL_VERSION } from './version.js';
 
-/** Zod schema for the outer message envelope. Payload shape is validated separately in `decode()`. */
+/**
+ * Zod schema for the outer message envelope. Payload shape is validated separately in `decode()`.
+ *
+ * `from` is an optional field populated **by the relay only** on messages forwarded between
+ * participants. It carries the sender's `participantId`. Clients MUST ignore `from` on inbound
+ * messages they receive, and MUST NOT set it on outgoing messages (the relay strips and
+ * overwrites any client-supplied value with the authoritative participantId).
+ */
 export const EnvelopeSchema = z
   .object({
     v: z.literal(PROTOCOL_VERSION),
@@ -13,6 +20,8 @@ export const EnvelopeSchema = z
     ts: z.number().int().nonnegative(),
     type: z.string(),
     payload: z.unknown(),
+    /** Set by the relay before forwarding. 64 chars accommodates UUIDs (36), base64url-22, or any reasonably short participant ID format. */
+    from: z.string().min(1).max(64).optional(),
   })
   .strict();
 

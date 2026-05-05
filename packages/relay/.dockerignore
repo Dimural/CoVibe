@@ -1,0 +1,10 @@
+node_modules
+dist
+*.tsbuildinfo
+.git
+tests
+**/*.test.ts
+**/*.spec.ts
+.vscode
+.github
+.claude

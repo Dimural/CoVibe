@@ -3,7 +3,15 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/', '**/dist/', 'coverage/', 'out/', '.vscode-test/', 'eslint.config.js', '**/*.config.ts'],
+    ignores: [
+      '**/node_modules/',
+      '**/dist/',
+      'coverage/',
+      'out/',
+      '.vscode-test/',
+      'eslint.config.js',
+      '**/*.config.ts',
+    ],
   },
   ...tseslint.configs.recommendedTypeChecked,
   {
@@ -16,6 +24,7 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
+      'no-console': 'error',
     },
   },
 );
