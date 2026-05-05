@@ -5,3 +5,6 @@ dist
 tests
 **/*.test.ts
 **/*.spec.ts
+.vscode
+.github
+.claude
