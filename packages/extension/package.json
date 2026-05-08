@@ -18,6 +18,10 @@
   "contributes": {
     "commands": [
       {
+        "command": "covibes.focusSessionPanel",
+        "title": "CoVibes: Focus Session Panel"
+      },
+      {
         "command": "covibes.startSession",
         "title": "CoVibes: Start Session"
       },
