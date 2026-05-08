@@ -18,7 +18,7 @@ export interface RepoContext {
 }
 
 export interface GitContextError {
-  kind: 'no-repo' | 'no-remote' | 'multiple-repos' | 'git-ext-unavailable';
+  kind: 'no-repo' | 'no-remote' | 'git-ext-unavailable';
   message: string;
 }
 
@@ -59,6 +59,10 @@ interface GitAPI {
   onDidChangeState?: ((listener: () => void) => VsCodeDisposable) | undefined;
 }
 
+interface GitExtension {
+  getAPI(version: 1): GitAPI;
+}
+
 // ---------------------------------------------------------------------------
 // Pure logic (exported for testing via dependency injection)
 // ---------------------------------------------------------------------------
@@ -68,6 +72,12 @@ interface GitAPI {
  * tests can pass mock objects without needing the VS Code extension host.
  *
  * Exported with a leading `_` to signal "exported for testing only".
+ *
+ * Edge cases:
+ * - Detached HEAD: `branch` is `'HEAD'` (when `state.HEAD.name` is undefined).
+ * - No commits: `headSha` is `''` (when `state.HEAD.commit` is undefined).
+ * - Multiple repos: picks the repo that owns the active editor's document URI,
+ *   falls back to `repositories[0]` if no match or no active editor.
  */
 export function _probeRepoContext(
   gitApi: GitAPI | undefined,
@@ -138,10 +148,8 @@ export function _probeRepoContext(
 export async function getRepoContext(): Promise<RepoContext | GitContextError> {
   const vscode = await import('vscode');
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const gitExt = vscode.extensions.getExtension<any>('vscode.git');
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  const gitApi = gitExt?.exports?.getAPI(1) as GitAPI | undefined;
+  const gitExt = vscode.extensions.getExtension<GitExtension>('vscode.git');
+  const gitApi = gitExt?.exports?.getAPI(1);
 
   const activeUri = vscode.window.activeTextEditor?.document.uri ?? null;
 
@@ -159,10 +167,8 @@ export async function watchBranchChanges(
 ): Promise<VsCodeDisposable> {
   const vscode = await import('vscode');
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const gitExt = vscode.extensions.getExtension<any>('vscode.git');
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  const gitApi = gitExt?.exports?.getAPI(1) as GitAPI | undefined;
+  const gitExt = vscode.extensions.getExtension<GitExtension>('vscode.git');
+  const gitApi = gitExt?.exports?.getAPI(1);
 
   if (gitApi === undefined) {
     // No git API — return a no-op disposable.
