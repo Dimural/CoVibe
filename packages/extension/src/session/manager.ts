@@ -67,7 +67,7 @@ export class BranchMismatchError extends Error {
 // ---------------------------------------------------------------------------
 
 const TERMINAL_CLOSE_CODES = new Set([
-  4400, // InvalidParams
+  4400, // 4400 InvalidParams is also terminal — query params won't change on reconnect
   4401, // Unauthorized
   4403, // Forbidden
   4426, // ProtocolMismatch
@@ -195,6 +195,7 @@ export class SessionManager {
 
     const client = this.client;
     if (client !== null) {
+      client.send('session.leave', { reason: 'user' });
       await client.disconnect();
       this.client = null;
     }

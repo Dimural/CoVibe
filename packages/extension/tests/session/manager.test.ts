@@ -280,6 +280,10 @@ describe('SessionManager', () => {
     const afterLeave = stateChanges[stateChanges.length - 1];
     expect(afterLeave?.kind).toBe('Idle');
     expect(fakeClient.connected).toBe(false);
+
+    const leaveMsg = fakeClient.sentMessages.find((m) => m.type === 'session.leave');
+    expect(leaveMsg).toBeDefined();
+    expect(leaveMsg?.type).toBe('session.leave');
   });
 
   // -------------------------------------------------------------------------
