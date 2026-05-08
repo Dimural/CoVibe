@@ -284,6 +284,10 @@ describe('SessionManager', () => {
     const leaveMsg = fakeClient.sentMessages.find((m) => m.type === 'session.leave');
     expect(leaveMsg).toBeDefined();
     expect(leaveMsg?.type).toBe('session.leave');
+
+    // No spurious Failed transition should have been emitted (race condition fix)
+    const failedState = stateChanges.find((s) => s.kind === 'Failed');
+    expect(failedState).toBeUndefined();
   });
 
   // -------------------------------------------------------------------------
@@ -343,5 +347,68 @@ describe('SessionManager', () => {
 
     // Second start should throw
     await expect(manager.start(repoCtx)).rejects.toThrow('Session already started');
+  });
+
+  // -------------------------------------------------------------------------
+  // 9. connect() failure transitions to Failed
+  // -------------------------------------------------------------------------
+
+  it('connect() failure transitions to Failed', async () => {
+    // FakeRelayClient whose connect() rejects
+    class RejectingFakeClient extends FakeRelayClient {
+      override connect(): Promise<void> {
+        return Promise.reject(new Error('ECONNREFUSED'));
+      }
+    }
+    const rejectingClient = new RejectingFakeClient();
+    const { manager, stateChanges } = makeManager(rejectingClient);
+
+    await expect(manager.start(repoCtx)).resolves.toBeUndefined();
+
+    // State should be Failed after connect() rejection
+    const failedState = stateChanges.find((s) => s.kind === 'Failed');
+    expect(failedState).toBeDefined();
+    expect(failedState?.kind).toBe('Failed');
+
+    // Manager should be reusable after failure (back to some terminal state)
+    // — the state machine allows start() again only from Idle, but Failed is
+    // a terminal state here; just verify the transition happened.
+    expect(stateChanges.at(-1)?.kind).toBe('Failed');
+  });
+
+  // -------------------------------------------------------------------------
+  // 10. Reconnecting → Active re-transition
+  // -------------------------------------------------------------------------
+
+  it('Reconnecting state transitions back to Active on session.state message', async () => {
+    const { manager, stateChanges } = makeManager(fakeClient);
+
+    await manager.start(repoCtx);
+
+    // Go Active first
+    fakeClient.emit(
+      'message',
+      makeSessionStateMessage([{ id: 'p1', displayName: 'Alice', color: '#ff0000' }]),
+    );
+    expect(stateChanges.find((s) => s.kind === 'Active')).toBeDefined();
+
+    // Simulate reconnecting
+    fakeClient.emit('reconnecting', 1, 1000);
+    expect(stateChanges.find((s) => s.kind === 'Reconnecting')).toBeDefined();
+
+    // Server reconnects and sends session.state again
+    fakeClient.emit(
+      'message',
+      makeSessionStateMessage([
+        { id: 'p1', displayName: 'Alice', color: '#ff0000' },
+        { id: 'p2', displayName: 'Bob', color: '#3498db' },
+      ]),
+    );
+
+    const lastState = stateChanges.at(-1);
+    expect(lastState?.kind).toBe('Active');
+    if (lastState?.kind === 'Active') {
+      expect(lastState.participants).toHaveLength(2);
+    }
   });
 });

@@ -50,7 +50,11 @@ export const IDLE_STATE: SessionState = { kind: 'Idle' };
 // ---------------------------------------------------------------------------
 
 /** Transition to Connecting (from Idle). */
-export function toConnecting(sessionId: string, inviteLink: string): SessionState {
+export function toConnecting(
+  _state: SessionState & { kind: 'Idle' },
+  sessionId: string,
+  inviteLink: string,
+): SessionState {
   return { kind: 'Connecting', sessionId, inviteLink };
 }
 
@@ -70,6 +74,20 @@ export function toActive(
 /** Transition to Reconnecting (from Active). */
 export function toReconnecting(
   state: SessionState & { kind: 'Active' },
+  attempt: number,
+): SessionState {
+  return {
+    kind: 'Reconnecting',
+    sessionId: state.sessionId,
+    inviteLink: state.inviteLink,
+    participants: state.participants,
+    attempt,
+  };
+}
+
+/** Update Reconnecting state with a new attempt counter (from Active or Reconnecting). */
+export function toReconnectingUpdate(
+  state: SessionState & { kind: 'Active' | 'Reconnecting' },
   attempt: number,
 ): SessionState {
   return {

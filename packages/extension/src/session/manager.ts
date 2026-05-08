@@ -25,7 +25,7 @@ import {
   IDLE_STATE,
   toConnecting,
   toActive,
-  toReconnecting,
+  toReconnectingUpdate,
   toFailed,
   toIdle,
   type SessionState,
@@ -154,7 +154,13 @@ export class SessionManager {
   /**
    * Joins an existing session via an invite link.
    *
-   * Throws `BranchMismatchError` if the invite link targets a different branch.
+   * Branch mismatch throws `BranchMismatchError`. The caller is responsible for
+   * prompting the user, performing the branch switch, and retrying with the
+   * corrected `repoContext`.
+   *
+   * NOTE: Branch-checkout UI (i.e. "Switch to {branch}?") is intentionally
+   * deferred to the extension command handler — this method only validates and
+   * throws so the handler can decide what to do.
    */
   async join(inviteLink: string, repoContext: RepoContext): Promise<void> {
     if (this.state.kind !== 'Idle') {
@@ -193,14 +199,18 @@ export class SessionManager {
       return;
     }
 
+    // Transition to Idle BEFORE disconnecting so that the close event fired
+    // synchronously by disconnect() sees state === Idle and no-ops via the
+    // guard in onClose.
     const client = this.client;
+    this.client = null;
+    this.setState(toIdle());
+
     if (client !== null) {
       client.send('session.leave', { reason: 'user' });
       await client.disconnect();
-      this.client = null;
+      this.removeListeners(client);
     }
-
-    this.setState(toIdle());
   }
 
   /**
@@ -252,8 +262,10 @@ export class SessionManager {
   }): Promise<void> {
     const { sessionId, token, inviteLink, repoContext } = opts;
 
-    // Transition to Connecting
-    this.setState(toConnecting(sessionId, inviteLink));
+    // Transition to Connecting — guard above ensures this.state.kind === 'Idle'
+    this.setState(
+      toConnecting(this.state as SessionState & { kind: 'Idle' }, sessionId, inviteLink),
+    );
 
     // Build the client
     const clientOpts: RelayClientOptions = {
@@ -270,6 +282,16 @@ export class SessionManager {
     this.client = client;
 
     // --- Event listeners -------------------------------------------------------
+
+    /** Remove all three listeners from a client instance. */
+    const removeListeners = (c: IRelayClient): void => {
+      c.off('message', onMessage);
+      c.off('reconnecting', onReconnecting);
+      c.off('close', onClose);
+    };
+
+    // Expose removeListeners on the instance so leave() can call it.
+    this.removeListeners = removeListeners;
 
     // session.state → Active
     const onMessage = (msg: unknown): void => {
@@ -298,14 +320,9 @@ export class SessionManager {
     // reconnecting event → Reconnecting
     const onReconnecting = (attempt: unknown): void => {
       const current = this.state;
-      if (current.kind === 'Active') {
-        this.setState(toReconnecting(current, typeof attempt === 'number' ? attempt : 0));
-      } else if (current.kind === 'Reconnecting') {
-        // Update attempt counter
-        this.setState({
-          ...current,
-          attempt: typeof attempt === 'number' ? attempt : current.attempt,
-        });
+      const attemptNum = typeof attempt === 'number' ? attempt : 0;
+      if (current.kind === 'Active' || current.kind === 'Reconnecting') {
+        this.setState(toReconnectingUpdate(current, attemptNum));
       }
     };
 
@@ -314,12 +331,14 @@ export class SessionManager {
       const closeCode = typeof code === 'number' ? code : 1006;
 
       if (TERMINAL_CLOSE_CODES.has(closeCode)) {
+        removeListeners(client);
         this.setState(toFailed(`Connection closed with terminal code ${closeCode}`));
       } else {
         // Non-terminal close means the relay gave up reconnecting (max attempts
         // exceeded) or we got an unexpected close after all retries failed.
         const current = this.state;
         if (current.kind !== 'Idle') {
+          removeListeners(client);
           this.setState(toFailed(`Connection lost (code ${closeCode})`));
         }
       }
@@ -335,11 +354,16 @@ export class SessionManager {
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       this.setState(toFailed(reason));
-      // Remove listeners to avoid memory leaks
-      client.off('message', onMessage);
-      client.off('reconnecting', onReconnecting);
-      client.off('close', onClose);
+      removeListeners(client);
       this.client = null;
     }
   }
+
+  /**
+   * Remove event listeners from the current client.
+   * Replaced each time connectSession() is called; no-op by default.
+   */
+  private removeListeners: (client: IRelayClient) => void = () => {
+    /* no-op until connectSession initialises the real remover */
+  };
 }
