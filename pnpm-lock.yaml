@@ -36,6 +36,9 @@ importers:
         specifier: ^8.18.0
         version: 8.20.0
     devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
       '@types/vscode':
         specifier: ^1.95.0
         version: 1.118.0

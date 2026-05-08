@@ -29,7 +29,32 @@
         "command": "covibes.leaveSession",
         "title": "CoVibes: Leave Session"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "CoVibes",
+      "properties": {
+        "covibes.relayUrl": {
+          "type": "string",
+          "default": "wss://covibes-relay.fly.dev",
+          "description": "WebSocket URL of the CoVibes relay server"
+        },
+        "covibes.followMode.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable follow mode (auto-scroll to followed participant's cursor)"
+        },
+        "covibes.agentDetection.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable heuristic AI agent detection"
+        },
+        "covibes.gracePeriodSeconds": {
+          "type": "number",
+          "default": 1800,
+          "description": "Seconds to keep a session open after the last participant disconnects"
+        }
+      }
+    }
   },
   "scripts": {
     "build": "node esbuild.config.mjs",
@@ -39,6 +64,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "@types/vscode": "^1.95.0",
     "esbuild": "^0.24.0",
     "vitest": "^2.1.0"
