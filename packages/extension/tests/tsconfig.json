@@ -1,0 +1,12 @@
+// Auto-discovered by ESLint projectService for test files (must be named tsconfig.json)
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["./**/*"]
+}
