@@ -20,6 +20,7 @@ export type PayloadOf<T extends MessageType> = MessagePayload<T>;
 
 // Close codes that indicate a terminal server-side rejection — do NOT reconnect.
 const TERMINAL_CLOSE_CODES = new Set([
+  4400, // InvalidParams — malformed session/token/participant; won't change between attempts
   4401, // Unauthorized
   4403, // Forbidden
   4426, // ProtocolMismatch
@@ -66,6 +67,12 @@ export class RelayClient {
   private ws: WebSocket | null = null;
   private _connected = false;
   private _disconnecting = false;
+  /**
+   * Tracks whether the socket has ever successfully reached the open state.
+   * Used to prevent background reconnect loops when the very first connect()
+   * call fails (e.g. server unreachable).
+   */
+  private _everConnected = false;
 
   /** Current reconnect attempt counter. Reset on successful connect. */
   private reconnectAttempt = 0;
@@ -74,6 +81,10 @@ export class RelayClient {
   private readonly emitter = new EventEmitter();
 
   constructor(opts: RelayClientOptions) {
+    // Issue 8: guard against MaxListenersExceededWarning when many listeners
+    // are attached (e.g. multiple once() calls per event in tests/session mgr).
+    this.emitter.setMaxListeners(20);
+
     this.opts = {
       sessionId: opts.sessionId,
       participantId: opts.participantId,
@@ -100,12 +111,23 @@ export class RelayClient {
 
   /**
    * Opens the WebSocket connection and sends session.join.
+   *
    * Resolves once the socket is open and session.join has been sent.
+   * Does NOT wait for session.state — listen for the first 'message' event
+   * of type 'session.state' to confirm join acknowledgement.
+   *
+   * @remarks
+   * Resolving after session.join (not session.state) is intentional:
+   * - session.state would complicate reconnect logic (need to await it on every reconnect)
+   * - The session manager (Task 3.5) can listen for the first message event of
+   *   type session.state instead.
    */
   connect(): Promise<void> {
     if (this._connected) {
       return Promise.resolve();
     }
+    // Issue 1: reset _disconnecting so the client is reusable after disconnect().
+    this._disconnecting = false;
     return this.openSocket();
   }
 
@@ -129,7 +151,16 @@ export class RelayClient {
     this.cancelReconnect();
 
     return new Promise<void>((resolve) => {
-      if (this.ws === null || !this._connected) {
+      if (this.ws === null) {
+        resolve();
+        return;
+      }
+
+      // Issue 2: socket is still in the connecting phase (open hasn't fired yet).
+      // Terminate immediately so it never completes the handshake.
+      if (!this._connected) {
+        this.ws.terminate();
+        this.ws = null;
         resolve();
         return;
       }
@@ -143,25 +174,28 @@ export class RelayClient {
 
       const ws = this.ws;
 
+      // Issue 7: consolidate the two once('close', ...) registrations into one handler.
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
       const onClose = (): void => {
+        if (timeoutHandle !== null) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
         resolve();
       };
 
       ws.once('close', onClose);
 
       // Give it 2 seconds to close gracefully, then force close
-      const timeout = setTimeout(() => {
+      timeoutHandle = setTimeout(() => {
+        timeoutHandle = null;
         ws.off('close', onClose);
         ws.terminate();
         resolve();
       }, 2000);
 
       ws.close(1000, 'client disconnect');
-
-      // Clear the timeout once closed
-      ws.once('close', () => {
-        clearTimeout(timeout);
-      });
     });
   }
 
@@ -214,8 +248,13 @@ export class RelayClient {
       const ws = new WebSocket(url);
       this.ws = ws;
 
+      // Issue 3: reset _everConnected for this socket so that an initial
+      // connection failure doesn't trigger a background reconnect loop.
+      this._everConnected = false;
+
       const onOpen = (): void => {
         this._connected = true;
+        this._everConnected = true;
         this.reconnectAttempt = 0;
 
         // Send session.join immediately after opening
@@ -253,6 +292,14 @@ export class RelayClient {
 
         if (this._disconnecting) {
           // Intentional disconnect — emit close and stop
+          this.emit('close', code, reasonStr);
+          return;
+        }
+
+        // Issue 3: if the socket never reached the open state (initial connect
+        // failure), emit close and stop — do NOT start a background reconnect
+        // loop that the caller didn't ask for.
+        if (!this._everConnected) {
           this.emit('close', code, reasonStr);
           return;
         }

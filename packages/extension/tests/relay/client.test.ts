@@ -297,6 +297,35 @@ describe('RelayClient', () => {
     expect(reconnectingEvents.length).toBe(0);
   });
 
+  it('error event: server sends malformed JSON, client emits error event', async () => {
+    server = await createTestServer();
+    const { wss, port } = server;
+
+    let serverSocket: WsWebSocket | null = null;
+    wss.on('connection', (ws) => {
+      serverSocket = ws;
+    });
+
+    const client = new RelayClient(makeClientOpts(port));
+    await client.connect();
+
+    await vi.waitFor(() => {
+      expect(serverSocket).not.toBeNull();
+    });
+
+    const errorPromise = new Promise<Error>((resolve) => {
+      client.once('error', (err) => resolve(err));
+    });
+
+    // Send malformed JSON — not a valid protocol message
+    serverSocket!.send('{not valid json!!!');
+
+    const err = await errorPromise;
+    expect(err).toBeInstanceOf(Error);
+
+    await client.disconnect();
+  });
+
   it('disconnect: client.disconnect() sends session.leave then connection closes gracefully', async () => {
     server = await createTestServer();
     const { wss, port } = server;
