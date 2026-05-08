@@ -1,0 +1,50 @@
+{
+  "name": "@covibes/extension",
+  "displayName": "CoVibes",
+  "description": "Real-time collaborative AI-assisted coding sessions",
+  "version": "0.0.1",
+  "publisher": "covibes",
+  "private": true,
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.cjs",
+  "contributes": {
+    "commands": [
+      {
+        "command": "covibes.startSession",
+        "title": "CoVibes: Start Session"
+      },
+      {
+        "command": "covibes.joinSession",
+        "title": "CoVibes: Join Session"
+      },
+      {
+        "command": "covibes.leaveSession",
+        "title": "CoVibes: Leave Session"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "build:watch": "node esbuild.config.mjs --watch",
+    "lint": "eslint src --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.95.0",
+    "esbuild": "^0.24.0",
+    "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "@covibes/protocol": "workspace:*",
+    "ws": "^8.18.0"
+  }
+}
