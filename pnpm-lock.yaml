@@ -42,6 +42,9 @@ importers:
       '@types/vscode':
         specifier: ^1.95.0
         version: 1.118.0
+      '@types/ws':
+        specifier: ^8.5.12
+        version: 8.18.1
       esbuild:
         specifier: ^0.24.0
         version: 0.24.2

@@ -4,7 +4,9 @@
     "outDir": "dist",
     "rootDir": "src",
     "lib": ["ES2022"],
-    "types": ["vscode", "node"]
+    "types": ["vscode", "node"],
+    "module": "Preserve",
+    "moduleResolution": "Bundler"
   },
   "include": ["src/**/*.ts"],
   "references": [{ "path": "../protocol" }]
