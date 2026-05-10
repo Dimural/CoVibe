@@ -54,7 +54,7 @@ jobs:
   deploy:
     name: Deploy relay to Fly.io
     needs: ci
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && secrets.FLY_API_TOKEN != ''
     runs-on: ubuntu-latest
     environment: production
     permissions:
