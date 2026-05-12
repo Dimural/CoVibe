@@ -16,6 +16,34 @@ export class Disposable {
   dispose() {}
 }
 
+// Mirrors VS Code's TextDocumentChangeReason enum. Used by editCapture tests
+// to assert undo/redo handling.
+export const TextDocumentChangeReason = {
+  Undo: 1,
+  Redo: 2,
+} as const;
+
+// Minimal EventEmitter shape mirroring vscode.EventEmitter. editCapture wires
+// itself to an event source; tests use this to fire synthetic change events
+// without needing a real extension host.
+export class EventEmitter<T> {
+  private readonly listeners = new Set<(value: T) => void>();
+  readonly event = (listener: (value: T) => void): { dispose(): void } => {
+    this.listeners.add(listener);
+    return {
+      dispose: () => {
+        this.listeners.delete(listener);
+      },
+    };
+  };
+  fire(value: T): void {
+    for (const l of [...this.listeners]) l(value);
+  }
+  dispose(): void {
+    this.listeners.clear();
+  }
+}
+
 // Minimal Uri stub. Only `Uri.file(path)` is implemented; it stores the path
 // verbatim as `fsPath`. This is enough for path-normalization tests (which
 // inspect `fsPath`) and lets us construct Windows-style paths under node by
