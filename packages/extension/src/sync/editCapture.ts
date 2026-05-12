@@ -181,40 +181,45 @@ export class EditCapture {
     this.applyingRemote.add(doc);
   }
 
-  /** Clear the remote-apply marker for `doc` without firing an event. */
-  unmarkApplyingRemote(doc: ChangeDocument): void {
-    this.applyingRemote.delete(doc);
-  }
-
   // -------------------------------------------------------------------------
   // Internals
   // -------------------------------------------------------------------------
 
   private handle(evt: CapturedChangeEvent): void {
-    // (1) Metadata-only events have no content changes.
-    if (evt.contentChanges.length === 0) return;
-
     const docUri = evt.document.uri;
 
-    // (2) Filter non-file URIs (output panels, vscode-userdata, ...).
+    // (1) Filter non-file URIs (output panels, vscode-userdata, ...). We do
+    // this before the marker check because a marker is only meaningful for
+    // file-backed docs we could possibly own.
     if (docUri.scheme !== 'file') return;
 
-    // (3) Resolve workspace root; skip if outside.
+    // (2) Resolve workspace root; skip if outside. Same rationale as (1) —
+    // markers on docs outside the workspace are not ours to consume.
     const rootUri = this.getWorkspaceFolderUri(docUri);
     if (rootUri === undefined) return;
+
+    // (3) If this event is the result of our own remote-apply, consume the
+    // marker and skip without converting. Marker is single-use.
+    //
+    // This MUST run before the metadata-only short-circuit and before the
+    // repository-registration check: a metadata-only event (e.g. dirty-state
+    // change) arriving between `markApplyingRemote` and the actual apply
+    // event would otherwise leave the marker uncon­sumed, causing it to
+    // swallow the next legitimate user edit.
+    if (this.applyingRemote.has(evt.document)) {
+      this.applyingRemote.delete(evt.document);
+      return;
+    }
+
+    // (4) Metadata-only events have no content changes.
+    if (evt.contentChanges.length === 0) return;
+
     let relativePath: string;
     try {
       relativePath = toRelativePosixPath(rootUri, docUri);
     } catch {
       // toRelativePosixPath throws when the file is outside the root —
       // this is a documented skip case, not an error worth surfacing.
-      return;
-    }
-
-    // (4) If this event is the result of our own remote-apply, consume the
-    // marker and skip without converting. Marker is single-use.
-    if (this.applyingRemote.has(evt.document)) {
-      this.applyingRemote.delete(evt.document);
       return;
     }
 

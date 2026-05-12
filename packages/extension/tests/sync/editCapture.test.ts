@@ -173,6 +173,31 @@ describe('EditCapture — skip cases', () => {
     expect(h.onCapture).toHaveBeenCalledTimes(1);
   });
 
+  it('consumes the applyingRemote marker on a metadata-only event so it cannot leak to a later real edit', () => {
+    // Regression: a metadata-only event (contentChanges === []) arriving
+    // between `markApplyingRemote` and the actual remote-apply event must
+    // still consume the marker. Otherwise the marker survives to swallow
+    // the next legitimate user edit.
+    const h = makeHarness();
+    const doc = makeDoc(Uri.file('/ws/a.ts'), 'hello');
+    h.repo.getOrCreate('a.ts', doc.uri, 'hello');
+    h.capture.markApplyingRemote(doc);
+
+    // Metadata-only event (no content changes) — must consume the marker.
+    const metadataEvt: CapturedChangeEvent = {
+      document: doc,
+      contentChanges: [],
+    };
+    h.emitter.fire(metadataEvt);
+    expect(h.onCapture).not.toHaveBeenCalled();
+
+    // Subsequent real edit must be captured normally (marker is gone).
+    h.fireEdit(doc as ChangeDocument & { _set(t: string): void }, [
+      { rangeOffset: 0, rangeLength: 0, text: 'Y' },
+    ]);
+    expect(h.onCapture).toHaveBeenCalledTimes(1);
+  });
+
   it('captures local undo/redo (only remote-driven undo/redo is suppressed via marker)', () => {
     const h = makeHarness();
     const doc = makeDoc(Uri.file('/ws/a.ts'), 'hello');
