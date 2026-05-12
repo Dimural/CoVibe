@@ -40,6 +40,18 @@ describe('toRelativePosixPath', () => {
     const root = Uri.file('/Users/alice/code/proj');
     expect(toRelativePosixPath(root, root)).toBe('.');
   });
+
+  it('normalizes ".." segments that resolve back inside the root', () => {
+    const root = Uri.file('/Users/alice/code/proj');
+    const file = Uri.file('/Users/alice/code/proj/src/../src/foo.ts');
+    expect(toRelativePosixPath(root, file)).toBe('src/foo.ts');
+  });
+
+  it('handles deeply nested paths', () => {
+    const root = Uri.file('/Users/alice/code/proj');
+    const file = Uri.file('/Users/alice/code/proj/a/b/c/d/e/f/g/h.ts');
+    expect(toRelativePosixPath(root, file)).toBe('a/b/c/d/e/f/g/h.ts');
+  });
 });
 
 describe('DocumentRepository', () => {

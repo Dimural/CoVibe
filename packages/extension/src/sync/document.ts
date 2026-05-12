@@ -57,7 +57,7 @@ export class SyncedDocument {
     this._baseText = text;
   }
 
-  /** Current document version (server-acked). Starts at 0. */
+  /** Current document version (engine-managed). Starts at 0. */
   get version(): number {
     return this._version;
   }
@@ -91,7 +91,13 @@ export class SyncedDocument {
     return [...this._ackedOps];
   }
 
-  /** Append an op to the acked buffer. */
+  /**
+   * Append an op to the acked buffer.
+   *
+   * No `clear` counterpart: acked history is append-only in Phase 4. Bounding
+   * the history (e.g. to a ring buffer) is a later concern when memory becomes
+   * a constraint, not now.
+   */
   appendAcked(op: TextOp): void {
     this._ackedOps.push(op);
   }
