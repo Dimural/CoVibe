@@ -171,6 +171,8 @@ describe('Scenario 2 — routing', () => {
       expect(bMsg.type).toBe('doc.delta');
       expect(bMsg.envelope.from).toBe(aliceId);
 
+      // Sequencer sends doc.ack back to sender — drain it, then verify no further echo.
+      await A.recv((m) => m.type === 'doc.ack', 500);
       await A.expectNoMessage(150);
     } finally {
       await ctx.stop();
@@ -412,8 +414,10 @@ describe('Scenario 6 — cross-session isolation', () => {
       await Y2.recv((m) => m.type === 'session.state');
 
       // X1 sends doc.delta → X2 must receive; Y1 and Y2 must NOT.
+      // Sequencer also sends doc.ack back to X1 — drain it so later expectNoMessage passes.
       X1.sendEnvelope('doc.delta', { path: 'src/index.ts', baseVersion: 0, op: [] });
       await X2.recv((m) => m.type === 'doc.delta', 500);
+      await X1.recv((m) => m.type === 'doc.ack', 500);
       await Promise.all([Y1.expectNoMessage(150), Y2.expectNoMessage(150)]);
 
       // Y1 sends cursor.update → Y2 must receive; X1 and X2 must NOT.

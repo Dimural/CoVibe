@@ -341,7 +341,10 @@ export class Router {
           if (!sessionMap) return;
           let encoded: string;
           try {
-            encoded = encode(type, deltaPayload);
+            // Inject `from` so peers can attribute the edit — same contract as #forwardToPeers.
+            const bare = encode(type, deltaPayload);
+            const env = JSON.parse(bare) as Record<string, unknown>;
+            encoded = JSON.stringify({ ...env, from: senderConn.participantId });
           } catch (err: unknown) {
             this.#logger.error({ err, type }, 'encode failed in broadcastToPeers');
             return;
