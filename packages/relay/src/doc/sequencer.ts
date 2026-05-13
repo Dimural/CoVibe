@@ -1,4 +1,4 @@
-import { transformOp } from '@covibes/protocol';
+import { transformOp, normalizeOp } from '@covibes/protocol';
 import type { TextOp, DocDeltaPayload, MessageType, MessagePayload } from '@covibes/protocol';
 
 export class SequencerGapError extends Error {
@@ -46,12 +46,7 @@ export class DocSequencer {
     return docState;
   }
 
-  process(
-    sessionId: string,
-    _senderId: string,
-    payload: DocDeltaPayload,
-    callbacks: SequencerCallbacks,
-  ): void {
+  process(sessionId: string, payload: DocDeltaPayload, callbacks: SequencerCallbacks): void {
     const { path, baseVersion, op } = payload;
     const state = this.#getOrCreate(sessionId, path);
 
@@ -64,8 +59,8 @@ export class DocSequencer {
     // Collect concurrent ops: those accepted after the client's baseVersion.
     const concurrentEntries = state.revLog.filter((e) => e.serverVersion > baseVersion);
 
-    // Transform incoming op against each concurrent op. Server-accepted ops win ('left').
-    let transformedOp = op as TextOp;
+    // Normalize before transforming — ot-text-unicode requires canonical form.
+    let transformedOp = normalizeOp(op as TextOp);
     for (const entry of concurrentEntries) {
       transformedOp = transformOp(transformedOp, entry.op, 'right');
     }

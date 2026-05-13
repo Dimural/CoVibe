@@ -27,6 +27,7 @@ import type { Logger } from './log.js';
 import type { Metrics } from './metrics.js';
 import type { SessionView } from './sessionRegistry.js';
 import type { DocSequencer } from './doc/sequencer.js';
+import { SequencerGapError } from './doc/sequencer.js';
 
 /** Set of message types the Router will forward peer-to-peer. */
 export const ROUTABLE_TYPES: ReadonlySet<MessageType> = new Set<MessageType>([
@@ -332,7 +333,7 @@ export class Router {
 
   #routeDeltaViaSequencer(senderConn: Connection, payload: DocDeltaPayload): void {
     try {
-      this.#sequencer!.process(senderConn.sessionId, senderConn.participantId, payload, {
+      this.#sequencer!.process(senderConn.sessionId, payload, {
         sendToSender: (type, ackPayload) => {
           this.sendToParticipant(senderConn.sessionId, senderConn.participantId, type, ackPayload);
         },
@@ -341,12 +342,9 @@ export class Router {
           if (!sessionMap) return;
           let encoded: string;
           try {
-            // Inject `from` so peers can attribute the edit — same contract as #forwardToPeers.
-            const bare = encode(type, deltaPayload);
-            const env = JSON.parse(bare) as Record<string, unknown>;
-            encoded = JSON.stringify({ ...env, from: senderConn.participantId });
+            encoded = this.#encodeWithFrom(type, deltaPayload, senderConn.participantId);
           } catch (err: unknown) {
-            this.#logger.error({ err, type }, 'encode failed in broadcastToPeers');
+            this.#logger.error({ err, type }, 'encode failed in sequencer broadcastToPeers');
             return;
           }
           const byteLength = Buffer.byteLength(encoded, 'utf8');
@@ -376,16 +374,42 @@ export class Router {
         },
       });
     } catch (err: unknown) {
-      this.#logger.error({ err, sessionId: senderConn.sessionId }, 'sequencer error on doc.delta');
-      this.#sendError(senderConn, 'internal', 'sequencer error', true);
+      if (err instanceof SequencerGapError) {
+        this.#logger.warn(
+          { err, sessionId: senderConn.sessionId },
+          'doc.delta gap — client needs resync',
+        );
+        this.#sendError(
+          senderConn,
+          'doc.gap',
+          'document too far behind; request a full snapshot',
+          true,
+        );
+      } else {
+        this.#logger.error(
+          { err, sessionId: senderConn.sessionId },
+          'sequencer error on doc.delta',
+        );
+        this.#sendError(senderConn, 'internal', 'sequencer error', true);
+      }
     }
+  }
+
+  /** Encode a typed message and inject the relay's `from` field (sender attribution). */
+  #encodeWithFrom<T extends MessageType>(
+    type: T,
+    payload: MessagePayload<T>,
+    from: string,
+  ): string {
+    const bare = encode(type, payload);
+    const env = JSON.parse(bare) as Record<string, unknown>;
+    return JSON.stringify({ ...env, from });
   }
 
   #forwardToPeers(senderConn: Connection, envelope: Envelope): void {
     const sessionMap = this.#sessions.get(senderConn.sessionId);
     if (!sessionMap) return;
 
-    // Re-serialize with `from` injected.
     // Overwrite (or set) from — never trust the client's value.
     const envelopeWithFrom = JSON.stringify({ ...envelope, from: senderConn.participantId });
     const byteLength = Buffer.byteLength(envelopeWithFrom, 'utf8');

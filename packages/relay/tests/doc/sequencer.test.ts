@@ -47,7 +47,7 @@ describe('single client — no concurrency', () => {
     const seq = new DocSequencer();
     const { senderMessages, peerMessages, callbacks } = makeCallbacks();
 
-    seq.process('sess-1', 'p-A', { path: 'src/a.ts', baseVersion: 0, op: ['X'] }, callbacks);
+    seq.process('sess-1', { path: 'src/a.ts', baseVersion: 0, op: ['X'] }, callbacks);
 
     expect(senderMessages).toHaveLength(1);
     expect(peerMessages).toHaveLength(1);
@@ -86,14 +86,14 @@ describe('two concurrent ops — OT convergence', () => {
 
     // A sends first at baseVersion=0 → serverVersion=1
     const { senderMessages: ackA, peerMessages: broadcastToB, callbacks: cbA } = makeCallbacks();
-    seq.process('sess-2', 'p-A', { path: 'src/a.ts', baseVersion: 0, op: opA }, cbA);
+    seq.process('sess-2', { path: 'src/a.ts', baseVersion: 0, op: opA }, cbA);
 
     expect(ackA[0]?.payload as { serverVersion: number }).toMatchObject({ serverVersion: 1 });
     const transformedOpA = (broadcastToB[0]?.payload as { op: unknown }).op as TextOp;
 
     // B sends at baseVersion=0 (concurrent) → serverVersion=2
     const { senderMessages: ackB, peerMessages: broadcastToA, callbacks: cbB } = makeCallbacks();
-    seq.process('sess-2', 'p-B', { path: 'src/a.ts', baseVersion: 0, op: opB }, cbB);
+    seq.process('sess-2', { path: 'src/a.ts', baseVersion: 0, op: opB }, cbB);
 
     expect(ackB[0]?.payload as { serverVersion: number }).toMatchObject({ serverVersion: 2 });
     const transformedOpB = (broadcastToA[0]?.payload as { op: unknown }).op as TextOp;
@@ -119,10 +119,10 @@ describe('two concurrent ops — OT convergence', () => {
     const opB: TextOp = [5, 'Y'];
 
     const { callbacks: cbA } = makeCallbacks();
-    seq.process('sess-3', 'p-A', { path: 'src/a.ts', baseVersion: 0, op: opA }, cbA);
+    seq.process('sess-3', { path: 'src/a.ts', baseVersion: 0, op: opA }, cbA);
 
     const { senderMessages: ackB, callbacks: cbB } = makeCallbacks();
-    seq.process('sess-3', 'p-B', { path: 'src/a.ts', baseVersion: 0, op: opB }, cbB);
+    seq.process('sess-3', { path: 'src/a.ts', baseVersion: 0, op: opB }, cbB);
 
     const ack = ackB[0]?.payload as { baseVersion: number; serverVersion: number };
     expect(ack.baseVersion).toBe(0);
@@ -135,10 +135,10 @@ describe('two concurrent ops — OT convergence', () => {
     const opB: TextOp = [5, 'Y'];
 
     const { callbacks: cbA } = makeCallbacks();
-    seq.process('sess-4', 'p-A', { path: 'src/a.ts', baseVersion: 0, op: opA }, cbA);
+    seq.process('sess-4', { path: 'src/a.ts', baseVersion: 0, op: opA }, cbA);
 
     const { peerMessages: broadcastToA, callbacks: cbB } = makeCallbacks();
-    seq.process('sess-4', 'p-B', { path: 'src/a.ts', baseVersion: 0, op: opB }, cbB);
+    seq.process('sess-4', { path: 'src/a.ts', baseVersion: 0, op: opB }, cbB);
 
     const bcast = broadcastToA[0]?.payload as { baseVersion: number; serverVersion: number };
     expect(bcast.baseVersion).toBe(1);
@@ -156,13 +156,13 @@ describe('gap error', () => {
     // Fill revLog beyond 100 entries so the oldest entry is evicted
     for (let i = 0; i < 101; i++) {
       const { callbacks } = makeCallbacks();
-      seq.process('sess-gap', 'p-A', { path: 'src/a.ts', baseVersion: i, op: ['x'] }, callbacks);
+      seq.process('sess-gap', { path: 'src/a.ts', baseVersion: i, op: ['x'] }, callbacks);
     }
     // Now the oldest revLog entry is serverVersion=2 (entry 0 was evicted)
     // Client sends baseVersion=0 — older than what revLog can handle
     const { callbacks } = makeCallbacks();
     expect(() =>
-      seq.process('sess-gap', 'p-B', { path: 'src/a.ts', baseVersion: 0, op: ['y'] }, callbacks),
+      seq.process('sess-gap', { path: 'src/a.ts', baseVersion: 0, op: ['y'] }, callbacks),
     ).toThrow(SequencerGapError);
   });
 });
@@ -178,19 +178,14 @@ describe('disposeSession', () => {
     // Advance to serverVersion=3
     for (let i = 0; i < 3; i++) {
       const { callbacks } = makeCallbacks();
-      seq.process(
-        'sess-dispose',
-        'p-A',
-        { path: 'src/a.ts', baseVersion: i, op: ['x'] },
-        callbacks,
-      );
+      seq.process('sess-dispose', { path: 'src/a.ts', baseVersion: i, op: ['x'] }, callbacks);
     }
 
     seq.disposeSession('sess-dispose');
 
     // First op after dispose should get serverVersion=1
     const { senderMessages, callbacks } = makeCallbacks();
-    seq.process('sess-dispose', 'p-A', { path: 'src/a.ts', baseVersion: 0, op: ['x'] }, callbacks);
+    seq.process('sess-dispose', { path: 'src/a.ts', baseVersion: 0, op: ['x'] }, callbacks);
 
     const ack = senderMessages[0]?.payload as { serverVersion: number };
     expect(ack.serverVersion).toBe(1);
@@ -208,12 +203,12 @@ describe('cross-path independence', () => {
     // Three ops on src/a.ts
     for (let i = 0; i < 3; i++) {
       const { callbacks } = makeCallbacks();
-      seq.process('sess-paths', 'p-A', { path: 'src/a.ts', baseVersion: i, op: ['x'] }, callbacks);
+      seq.process('sess-paths', { path: 'src/a.ts', baseVersion: i, op: ['x'] }, callbacks);
     }
 
     // First op on src/b.ts should get serverVersion=1, not 4
     const { senderMessages, callbacks } = makeCallbacks();
-    seq.process('sess-paths', 'p-A', { path: 'src/b.ts', baseVersion: 0, op: ['x'] }, callbacks);
+    seq.process('sess-paths', { path: 'src/b.ts', baseVersion: 0, op: ['x'] }, callbacks);
 
     const ack = senderMessages[0]?.payload as { serverVersion: number };
     expect(ack.serverVersion).toBe(1);
@@ -225,16 +220,16 @@ describe('cross-path independence', () => {
     // Two ops on a.ts
     for (let i = 0; i < 2; i++) {
       const { callbacks } = makeCallbacks();
-      seq.process('sess-paths2', 'p-A', { path: 'src/a.ts', baseVersion: i, op: ['x'] }, callbacks);
+      seq.process('sess-paths2', { path: 'src/a.ts', baseVersion: i, op: ['x'] }, callbacks);
     }
 
     // One op on b.ts
     const { callbacks: cbB } = makeCallbacks();
-    seq.process('sess-paths2', 'p-A', { path: 'src/b.ts', baseVersion: 0, op: ['x'] }, cbB);
+    seq.process('sess-paths2', { path: 'src/b.ts', baseVersion: 0, op: ['x'] }, cbB);
 
     // Third op on a.ts — should get serverVersion=3
     const { senderMessages, callbacks } = makeCallbacks();
-    seq.process('sess-paths2', 'p-A', { path: 'src/a.ts', baseVersion: 2, op: ['x'] }, callbacks);
+    seq.process('sess-paths2', { path: 'src/a.ts', baseVersion: 2, op: ['x'] }, callbacks);
 
     const ack = senderMessages[0]?.payload as { serverVersion: number };
     expect(ack.serverVersion).toBe(3);

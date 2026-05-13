@@ -7,10 +7,12 @@
 import { z } from 'zod';
 import { DocVersion, RelPath } from './_common.js';
 
-export const DocDeltaPayload = z.object({
-  path: RelPath,
-  baseVersion: DocVersion,
-  op: z.unknown(),
-  serverVersion: DocVersion.optional(),
-});
+export const DocDeltaPayload = z
+  .object({
+    path: RelPath,
+    baseVersion: DocVersion,
+    op: z.unknown(),
+    serverVersion: DocVersion.optional(),
+  })
+  .strict();
 export type DocDeltaPayload = z.infer<typeof DocDeltaPayload>;
