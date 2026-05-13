@@ -134,6 +134,29 @@ interface DocState {
 const DEFAULT_REV_LOG_SIZE = 100;
 
 /**
+ * Thrown when the server violates the monotonic-version protocol guarantee.
+ * TCP/WebSocket ensures in-order delivery so this should never fire; when it
+ * does it indicates a relay bug that must not be silently ignored, because
+ * accepting a non-monotonic version would corrupt the `revLog` ordering and
+ * break future catch-up transforms.
+ */
+export class OTEngineProtocolError extends Error {
+  constructor(detail: {
+    path: string;
+    issue: string;
+    currentServerVersion: number;
+    offendingVersion: number;
+  }) {
+    super(
+      `OT protocol violation for '${detail.path}': ${detail.issue}. ` +
+        `currentServerVersion=${detail.currentServerVersion}, ` +
+        `offendingVersion=${detail.offendingVersion}`,
+    );
+    this.name = 'OTEngineProtocolError';
+  }
+}
+
+/**
  * Thrown when the engine is asked to transform a remote op whose `baseVersion`
  * predates the oldest entry in the local `revLog`. This is a sync-protocol
  * bug, not an edge case: the relay must guarantee that no client sees a
@@ -241,6 +264,15 @@ export class OTEngine {
       return;
     }
 
+    if (newServerVersion <= state.serverVersion) {
+      throw new OTEngineProtocolError({
+        path,
+        issue: 'ack carries non-monotonic newServerVersion',
+        currentServerVersion: state.serverVersion,
+        offendingVersion: newServerVersion,
+      });
+    }
+
     const doc = this.requireDoc(path);
     const acked = state.pending;
 
@@ -290,6 +322,15 @@ export class OTEngine {
     const doc = this.requireDoc(path);
     const state = this.getOrInitState(path);
 
+    if (newServerVersion <= state.serverVersion) {
+      throw new OTEngineProtocolError({
+        path,
+        issue: 'remote op carries non-monotonic newServerVersion',
+        currentServerVersion: state.serverVersion,
+        offendingVersion: newServerVersion,
+      });
+    }
+
     let incoming = op;
 
     // Step 1: catch up over our acked-but-not-seen-by-peer history.
@@ -327,28 +368,28 @@ export class OTEngine {
       state.buffer = normalizeOp(transformOp(otherBuffer, incomingBefore, 'right'));
     }
 
-    // Step 4: apply locally. The callback is responsible for calling
-    // `EditCapture.markApplyingRemote` and then invoking `workspace.applyEdit`
-    // (Task 4.5). Tests pass a spy.
-    this.callbacks.applyRemote(doc, incoming);
-
-    // Step 5: advance the engine's authoritative baseText. We do this here
-    // (and not inside the callback) so the OT state is self-consistent
-    // regardless of what the editor-side mutation does. Task 4.5's apply
-    // path must agree with this — the EditCapture invariant check will fail
-    // loudly if it ever drifts.
+    // Steps 4-5: advance all engine state BEFORE calling the user callback.
+    // This ordering is critical for re-entrancy safety: if the `applyRemote`
+    // callback synchronously triggers another engine method (e.g. an editor
+    // change event firing `onLocalEdit`), it must see the already-updated
+    // serverVersion and baseText, not the stale pre-remote values.
     doc.setBaseText(applyOp(doc.baseText, incoming));
-
-    // Step 6: book-keeping.
     state.serverVersion = newServerVersion;
     doc.setVersion(newServerVersion);
     this.pushRevLog(state, newServerVersion, incoming);
+
+    // Step 6 (last): notify the caller to mutate the VS Code editor. Kept
+    // last deliberately — see note above. Task 4.5 wires this to
+    // `EditCapture.markApplyingRemote` + `workspace.applyEdit`.
+    this.callbacks.applyRemote(doc, incoming);
   }
 
   /**
    * Snapshot of per-document state for tests / debugging. Returns
-   * `undefined` if no state exists for `path` yet. The returned object is a
-   * fresh copy — mutating it does not affect engine state.
+   * `undefined` if no state exists for `path` yet. The array is
+   * shallow-copied — do not mutate individual `TextOpComponent` objects
+   * (e.g. `{d: n}` delete components); they are immutable values by
+   * convention and shared with internal state.
    */
   inspect(path: string): OTEngineDocSnapshot | undefined {
     const state = this.states.get(path);

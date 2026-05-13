@@ -28,16 +28,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Uri } from 'vscode';
 import * as fc from 'fast-check';
-import {
-  applyOp,
-  normalizeOp,
-  NOOP,
-  type TextOp,
-  type TextOpComponent,
-} from '@covibes/protocol/ot';
+import { applyOp, normalizeOp, type TextOp, type TextOpComponent } from '@covibes/protocol/ot';
 import type { SyncedDocument } from '../../../src/sync/document.js';
 import { DocumentRepository } from '../../../src/sync/repo.js';
-import { OTEngine, OTEngineGapError, type OTEngineCallbacks } from '../../../src/sync/ot/engine.js';
+import {
+  OTEngine,
+  OTEngineGapError,
+  OTEngineProtocolError,
+  type OTEngineCallbacks,
+} from '../../../src/sync/ot/engine.js';
 
 // ---------------------------------------------------------------------------
 // Tiny test helpers
@@ -46,11 +45,9 @@ import { OTEngine, OTEngineGapError, type OTEngineCallbacks } from '../../../src
 const PATH = 'file.txt';
 
 function makeEngine(initialText = '') {
-  const root = Uri.file('/work');
   const fileUri = Uri.file('/work/file.txt');
   const repo = new DocumentRepository();
   const doc = repo.getOrCreate(PATH, fileUri, initialText);
-  void root;
   const sendDelta = vi.fn<(path: string, baseVersion: number, op: TextOp) => void>();
   const applyRemote = vi.fn<(d: SyncedDocument, op: TextOp) => void>();
   const callbacks: OTEngineCallbacks = { sendDelta, applyRemote };
@@ -72,13 +69,12 @@ function cpLen(s: string): number {
  * Caller guarantees `pos + deleteCount <= cpLen(text)`.
  */
 function buildOp(text: string, pos: number, deleteCount: number, insertText: string): TextOp {
-  const total = cpLen(text);
+  // Trailing skip is implicit — ot-text-unicode forbids explicit trailing number components.
+  void text; // text is used only for the caller's `cpLen` guard; kept for documentation.
   const op: TextOpComponent[] = [];
   if (pos > 0) op.push(pos);
   if (deleteCount > 0) op.push({ d: deleteCount });
   if (insertText.length > 0) op.push(insertText);
-  // Implicit trailing skip — ot-text-unicode forbids a trailing skip component.
-  void total;
   return op;
 }
 
@@ -155,11 +151,9 @@ describe('OTEngine — ack flow', () => {
 
   it('ack with mismatched baseVersion is dropped and state is unchanged', () => {
     const warn = vi.fn();
-    const root = Uri.file('/work');
     const fileUri = Uri.file('/work/file.txt');
     const repo = new DocumentRepository();
     repo.getOrCreate(PATH, fileUri, 'hi');
-    void root;
     const sendDelta = vi.fn();
     const applyRemote = vi.fn();
     const engine = new OTEngine(repo, { sendDelta, applyRemote }, { logger: { warn } });
@@ -247,11 +241,9 @@ describe('OTEngine — remote op flow', () => {
   });
 
   it('throws OTEngineGapError when remote baseVersion is too old to reconcile', () => {
-    const root = Uri.file('/work');
     const fileUri = Uri.file('/work/file.txt');
     const repo = new DocumentRepository();
     repo.getOrCreate(PATH, fileUri, 'hi');
-    void root;
     const sendDelta = vi.fn();
     const applyRemote = vi.fn();
     const engine = new OTEngine(repo, { sendDelta, applyRemote }, { revLogSize: 2 });
@@ -268,13 +260,70 @@ describe('OTEngine — remote op flow', () => {
   });
 });
 
+describe('OTEngine — re-entrancy', () => {
+  it('onLocalEdit inside applyRemote callback uses the post-remote serverVersion', () => {
+    // Re-entrancy scenario: Task 4.5 will call `workspace.applyEdit` inside
+    // `applyRemote`, which can trigger VS Code change events that reach
+    // `onLocalEdit` synchronously. The engine advances serverVersion BEFORE
+    // firing the callback so any re-entrant `onLocalEdit` sends against the
+    // correct (post-remote) baseVersion — not the stale pre-remote value.
+    const fileUri = Uri.file('/work/file.txt');
+    const repo = new DocumentRepository();
+    const doc = repo.getOrCreate(PATH, fileUri, 'hello');
+    const sendDelta = vi.fn<(path: string, baseVersion: number, op: TextOp) => void>();
+    // Declare the spy before the engine so the mock implementation can
+    // capture `engine` as a const (assigned after creation).
+    const applyRemoteSpy = vi.fn<(d: typeof doc, op: TextOp) => void>();
+    const engine = new OTEngine(repo, { sendDelta, applyRemote: applyRemoteSpy });
+    // Patch implementation after engine creation so the closure over
+    // `engine` is safe — applyRemote is only called during onRemoteOp below.
+    applyRemoteSpy.mockImplementation(() => {
+      // Simulates the editor applying the remote edit and immediately
+      // producing a new local change. At this point (with the fix),
+      // serverVersion is already 1 and baseText is already 'hello!'.
+      engine.onLocalEdit(PATH, buildOp(doc.baseText, 0, 0, 'Z'));
+    });
+
+    engine.onRemoteOp(PATH, 0, buildOp('hello', 5, 0, '!'), 1);
+
+    expect(applyRemoteSpy).toHaveBeenCalledTimes(1);
+    expect(sendDelta).toHaveBeenCalledTimes(1);
+    // With the fix: the re-entrant edit is sent at baseVersion=1 (post-remote).
+    // Under old ordering it would be baseVersion=0 (stale pre-remote).
+    const [, sentBaseVersion] = sendDelta.mock.calls[0]!;
+    expect(sentBaseVersion).toBe(1);
+  });
+});
+
+describe('OTEngine — monotonic version guard', () => {
+  it('onRemoteOp throws OTEngineProtocolError for non-monotonic newServerVersion', () => {
+    const { engine, sendDelta } = makeEngine('hello');
+    // Advance to serverVersion=1 via a legitimate remote op.
+    engine.onRemoteOp(PATH, 0, buildOp('hello', 5, 0, '!'), 1);
+    // Now send a remote with newServerVersion=1 again (non-monotonic).
+    expect(() => {
+      engine.onRemoteOp(PATH, 1, buildOp('hello!', 0, 0, 'Z'), 1);
+    }).toThrow(OTEngineProtocolError);
+    void sendDelta; // sendDelta unused in this test; suppress lint.
+  });
+
+  it('onAck throws OTEngineProtocolError for non-monotonic newServerVersion', () => {
+    const { engine, sendDelta } = makeEngine('hello');
+    // Send a local edit so there is a correlated pending.
+    engine.onLocalEdit(PATH, buildOp('hello', 5, 0, '!'));
+    expect(sendDelta).toHaveBeenCalledTimes(1);
+    // Simulate an ack with a stale or equal newServerVersion.
+    expect(() => {
+      engine.onAck(PATH, 0, 0); // newServerVersion=0, current=0 → non-monotonic
+    }).toThrow(OTEngineProtocolError);
+  });
+});
+
 describe('OTEngine — revLog', () => {
   it('caps the log to revLogSize entries (oldest dropped first)', () => {
-    const root = Uri.file('/work');
     const fileUri = Uri.file('/work/file.txt');
     const repo = new DocumentRepository();
     repo.getOrCreate(PATH, fileUri, '');
-    void root;
     const sendDelta = vi.fn();
     const applyRemote = vi.fn();
     const engine = new OTEngine(repo, { sendDelta, applyRemote }, { revLogSize: 3 });
@@ -427,29 +476,22 @@ function deliverOne(relay: FakeRelay, clients: Record<'A' | 'B', ClientHarness>)
 }
 
 /**
- * Generator helper: from current text, produce a random valid op.
- *
- * We bound the alphabet and op size to keep the search space tractable and
- * make shrinks readable.
+ * An event in the convergence property test. Op parameters for `local` events
+ * are embedded in the arbitrary so every fast-check seed produces a fully
+ * deterministic sequence — including shrinks and seeded re-runs. Using
+ * `fc.sample` inside the property body would break reproducibility because it
+ * runs its own independent RNG.
  */
-function arbOpForText(text: string): fc.Arbitrary<TextOp> {
-  const len = cpLen(text);
-  return fc
-    .record({
-      pos: fc.integer({ min: 0, max: len }),
-      delMax: fc.integer({ min: 0, max: Math.min(3, len) }),
-      insert: fc.string({ minLength: 0, maxLength: 3, unit: fc.constantFrom('a', 'b', 'c') }),
-    })
-    .map(({ pos, delMax, insert }) => {
-      const delCount = Math.min(delMax, len - pos);
-      // Empty-effect op (no delete, no insert) -> NOOP after normalize.
-      if (delCount === 0 && insert.length === 0) return NOOP;
-      return normalizeOp(buildOp(text, pos, delCount, insert));
-    })
-    .filter((op) => op.length > 0);
-}
-
-type Event = { kind: 'local'; who: 'A' | 'B' } | { kind: 'deliver' };
+type Event =
+  | {
+      kind: 'local';
+      who: 'A' | 'B';
+      /** Ratio in [0, 1] — multiplied by `cpLen(currentText)` to get the insert/delete position. */
+      posRatio: number;
+      delMax: number;
+      insert: string;
+    }
+  | { kind: 'deliver' };
 
 describe('OTEngine — convergence (property)', () => {
   it('two clients converge to the same text under arbitrary interleavings', () => {
@@ -457,8 +499,18 @@ describe('OTEngine — convergence (property)', () => {
       fc.property(
         fc.array(
           fc.oneof(
-            fc.record({ kind: fc.constant('local'), who: fc.constantFrom('A', 'B') }),
-            fc.record({ kind: fc.constant('deliver') }),
+            fc.record({
+              kind: fc.constant('local' as const),
+              who: fc.constantFrom<'A' | 'B'>('A', 'B'),
+              posRatio: fc.float({ min: 0, max: 1, noNaN: true }),
+              delMax: fc.integer({ min: 0, max: 3 }),
+              insert: fc.string({
+                minLength: 0,
+                maxLength: 3,
+                unit: fc.constantFrom('a', 'b', 'c'),
+              }),
+            }),
+            fc.record({ kind: fc.constant('deliver' as const) }),
           ),
           { minLength: 1, maxLength: 30 },
         ),
@@ -471,13 +523,16 @@ describe('OTEngine — convergence (property)', () => {
           for (const e of rawEvents as Event[]) {
             if (e.kind === 'local') {
               const c = clients[e.who];
-              // Build a valid op against the client's current text.
-              const sample = fc.sample(arbOpForText(c.text), 1)[0];
-              if (sample === undefined) continue;
+              const len = cpLen(c.text);
+              const pos = Math.min(len, Math.floor(e.posRatio * (len + 1)));
+              const delCount = Math.min(e.delMax, len - pos);
+              if (delCount === 0 && e.insert.length === 0) continue;
+              const op = normalizeOp(buildOp(c.text, pos, delCount, e.insert));
+              if (op.length === 0) continue;
               // Mirror EditCapture's contract: apply to editor first, then
               // hand to engine. The engine advances baseText itself.
-              c.text = applyOp(c.text, sample);
-              c.engine.onLocalEdit(PATH, sample);
+              c.text = applyOp(c.text, op);
+              c.engine.onLocalEdit(PATH, op);
             } else {
               deliverOne(relay, clients);
             }
