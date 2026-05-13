@@ -9,6 +9,7 @@ import { SessionJoinPayload as _SessionJoin } from './session-join.js';
 import { SessionLeavePayload as _SessionLeave } from './session-leave.js';
 import { SessionStatePayload as _SessionState } from './session-state.js';
 import { DocDeltaPayload as _DocDelta } from './doc-delta.js';
+import { DocAckPayload as _DocAck } from './doc-ack.js';
 import { CursorUpdatePayload as _CursorUpdate } from './cursor-update.js';
 import { AgentIntentPayload as _AgentIntent } from './agent-intent.js';
 import { AgentChangePayload as _AgentChange } from './agent-change.js';
@@ -29,6 +30,7 @@ export { SessionJoinPayload } from './session-join.js';
 export { SessionLeavePayload } from './session-leave.js';
 export { SessionStatePayload } from './session-state.js';
 export { DocDeltaPayload } from './doc-delta.js';
+export { DocAckPayload } from './doc-ack.js';
 export { CursorUpdatePayload } from './cursor-update.js';
 export { AgentIntentPayload } from './agent-intent.js';
 export { AgentChangePayload } from './agent-change.js';
@@ -47,6 +49,7 @@ export const MessageMap = {
   'session.leave': _SessionLeave,
   'session.state': _SessionState,
   'doc.delta': _DocDelta,
+  'doc.ack': _DocAck,
   'cursor.update': _CursorUpdate,
   'agent.intent': _AgentIntent,
   'agent.change': _AgentChange,
