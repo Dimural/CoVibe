@@ -38,6 +38,8 @@ export const ROUTABLE_TYPES: ReadonlySet<MessageType> = new Set<MessageType>([
   'git.operation',
   'git.ack',
   'conflict.resolve',
+  'doc.snapshot',
+  'doc.resync',
 ]);
 
 /**

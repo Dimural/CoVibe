@@ -109,6 +109,8 @@ const routablePayloads = {
     resolvedText: 'resolved',
     confirmedBy: ['p-1'],
   },
+  'doc.snapshot': { path: 'src/index.ts', serverVersion: 1, text: 'full document text' },
+  'doc.resync': { path: 'src/index.ts' },
 } as const;
 
 // ---------------------------------------------------------------------------

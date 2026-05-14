@@ -57,6 +57,18 @@ export class SyncedDocument {
     this._baseText = text;
   }
 
+  /**
+   * Reset the document to a new base text and version.
+   *
+   * Called on full-document resync (Task 4.7) after receiving a `doc.snapshot`.
+   * Pending and acked op buffers are not cleared here — the OT engine may choose
+   * to replay or discard them after calling this.
+   */
+  reset(newText: string, newVersion: number): void {
+    this._baseText = newText;
+    this._version = newVersion;
+  }
+
   /** Current document version (engine-managed). Starts at 0. */
   get version(): number {
     return this._version;

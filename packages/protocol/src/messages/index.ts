@@ -21,6 +21,8 @@ import { NavFilePayload as _NavFile } from './nav-file.js';
 import { ErrorPayload as _Error } from './error.js';
 import { PingPayload as _Ping } from './ping.js';
 import { PongPayload as _Pong } from './pong.js';
+import { DocSnapshotPayload as _DocSnapshot } from './doc-snapshot.js';
+import { DocResyncPayload as _DocResync } from './doc-resync.js';
 
 /**
  * Re-export each payload schema (value) and its inferred TypeScript type (type).
@@ -42,6 +44,8 @@ export { NavFilePayload } from './nav-file.js';
 export { ErrorPayload } from './error.js';
 export { PingPayload } from './ping.js';
 export { PongPayload } from './pong.js';
+export { DocSnapshotPayload } from './doc-snapshot.js';
+export { DocResyncPayload } from './doc-resync.js';
 
 /** Maps every known wire message type string to its payload Zod schema. */
 export const MessageMap = {
@@ -61,6 +65,8 @@ export const MessageMap = {
   error: _Error,
   ping: _Ping,
   pong: _Pong,
+  'doc.snapshot': _DocSnapshot,
+  'doc.resync': _DocResync,
 } as const satisfies Record<string, z.ZodTypeAny>;
 
 /** All known wire message type strings. */
