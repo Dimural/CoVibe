@@ -118,7 +118,7 @@ describe('applyRemoteOp', () => {
     const { deps } = makeDeps(doc, builder);
 
     const op: TextOp = ['X'];
-    await applyRemoteOp('/file.ts', syncedDoc, op, deps);
+    await applyRemoteOp(syncedDoc, op, deps);
 
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
@@ -141,7 +141,7 @@ describe('applyRemoteOp', () => {
     const { deps } = makeDeps(doc, builder);
 
     const op: TextOp = [5, 'X'];
-    await applyRemoteOp('/file.ts', syncedDoc, op, deps);
+    await applyRemoteOp(syncedDoc, op, deps);
 
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
@@ -164,7 +164,7 @@ describe('applyRemoteOp', () => {
     const { deps } = makeDeps(doc, builder);
 
     const op: TextOp = [{ d: 3 }];
-    await applyRemoteOp('/file.ts', syncedDoc, op, deps);
+    await applyRemoteOp(syncedDoc, op, deps);
 
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
@@ -188,7 +188,7 @@ describe('applyRemoteOp', () => {
 
     // skip 6 ("hello "), delete 5 ("world"), insert "there"
     const op: TextOp = [6, { d: 5 }, 'there'];
-    await applyRemoteOp('/file.ts', syncedDoc, op, deps);
+    await applyRemoteOp(syncedDoc, op, deps);
 
     expect(calls).toHaveLength(2);
     // delete "world" at (0,6)→(0,11)
@@ -222,7 +222,7 @@ describe('applyRemoteOp', () => {
 
     // skip 1 codepoint (the emoji), delete 1 codepoint ('X')
     const op: TextOp = [1, { d: 1 }];
-    await applyRemoteOp('/file.ts', syncedDoc, op, deps);
+    await applyRemoteOp(syncedDoc, op, deps);
 
     expect(calls).toHaveLength(1);
     // delete 'X' — starts at UTF-16 offset 2 (after the 2-unit emoji), ends at 3
@@ -244,7 +244,7 @@ describe('applyRemoteOp', () => {
     const { builder } = makeEditBuilder();
     const { deps, markApplyingRemoteMock, applyEditMock } = makeDeps(undefined, builder);
 
-    await expect(applyRemoteOp('/closed.ts', syncedDoc, ['X'], deps)).resolves.toBeUndefined();
+    await expect(applyRemoteOp(syncedDoc, ['X'], deps)).resolves.toBeUndefined();
     expect(markApplyingRemoteMock).not.toHaveBeenCalled();
     expect(applyEditMock).not.toHaveBeenCalled();
   });
@@ -260,17 +260,16 @@ describe('applyRemoteOp', () => {
     const { builder } = makeEditBuilder();
     const { deps, onResyncNeededMock, warnMock } = makeDeps(doc, builder, false);
 
-    await applyRemoteOp('src/file.ts', syncedDocWithUri, [1, { d: 1 }], deps);
+    await applyRemoteOp(syncedDocWithUri, [1, { d: 1 }], deps);
 
     expect(onResyncNeededMock).toHaveBeenCalledOnce();
-    expect(onResyncNeededMock).toHaveBeenCalledWith('src/file.ts', 7);
+    expect(onResyncNeededMock).toHaveBeenCalledWith(uri, 7);
     expect(warnMock).toHaveBeenCalledOnce();
     // Verify the warn context contains required fields (no document content)
     const warnArgs = warnMock.mock.calls[0] as [Record<string, unknown>, string];
     const ctx = warnArgs[0];
-    expect(ctx).toHaveProperty('path', 'src/file.ts');
-    expect(ctx).toHaveProperty('version', 7);
     expect(ctx).toHaveProperty('uri');
+    expect(ctx).toHaveProperty('version', 7);
   });
 
   // -------------------------------------------------------------------------
@@ -297,7 +296,7 @@ describe('applyRemoteOp', () => {
       logger: { warn: vi.fn(), error: vi.fn() },
     };
 
-    await applyRemoteOp('/file.ts', syncedDoc, ['X'], deps);
+    await applyRemoteOp(syncedDoc, ['X'], deps);
 
     expect(callOrder).toEqual(['markApplyingRemote', 'applyEdit']);
   });
@@ -318,7 +317,7 @@ describe('applyRemoteOp', () => {
 
     // skip 6 (past "line1\n"), delete 5 ("line2"), insert "NEW"
     const op: TextOp = [6, { d: 5 }, 'NEW'];
-    await applyRemoteOp('/multi.ts', syncedDoc, op, deps);
+    await applyRemoteOp(syncedDoc, op, deps);
 
     expect(calls).toHaveLength(2);
     // delete "line2" — starts at line 1, char 0; ends at line 1, char 5

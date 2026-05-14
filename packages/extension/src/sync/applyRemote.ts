@@ -67,7 +67,7 @@ export interface ApplyRemoteDeps {
    */
   markApplyingRemote(doc: ApplyDocument): void;
   /** Called when applyEdit returns false — the document needs a full snapshot resync. */
-  onResyncNeeded(path: string, version: number): void;
+  onResyncNeeded(uri: vscode.Uri, version: number): void;
   /** For structured logging of failures. Log without document content (paths + metadata only). */
   logger: {
     warn(context: Record<string, unknown>, msg: string): void;
@@ -89,18 +89,21 @@ export interface ApplyRemoteDeps {
  * Returns early (no-op) if the document is not currently open in the editor.
  */
 export async function applyRemoteOp(
-  path: string,
   syncedDoc: SyncedDocument,
   op: TextOp,
   deps: ApplyRemoteDeps,
 ): Promise<void> {
-  // Step 1: Get the open document — bail out if it's not open.
   const applyDoc = deps.getDocument(syncedDoc.uri);
   if (applyDoc === undefined) {
     return;
   }
 
-  // Step 2: Get the current document text (may include user edits on top of base).
+  // Use the live editor text (not syncedDoc.baseText) for offset conversion.
+  // By the time this callback fires, baseText has already been advanced to the
+  // post-remote state (OTEngine.onRemoteOp step 4). The incoming op was
+  // transformed against our pending/buffer ops so it applies to the current
+  // VS Code document state (what the user actually sees). Those two strings
+  // differ when there are in-flight local edits.
   const text = applyDoc.getText();
 
   // Step 3: Build the WorkspaceEdit by walking the op.
@@ -149,12 +152,11 @@ export async function applyRemoteOp(
   if (!ok) {
     deps.logger.warn(
       {
-        path,
-        version: syncedDoc.version,
         uri: syncedDoc.uri.toString(),
+        version: syncedDoc.version,
       },
       'applyRemoteOp: WorkspaceEdit apply failed — requesting resync',
     );
-    deps.onResyncNeeded(path, syncedDoc.version);
+    deps.onResyncNeeded(syncedDoc.uri, syncedDoc.version);
   }
 }
