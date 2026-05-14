@@ -85,6 +85,10 @@ export class CursorSync {
     participantId: string,
     payload: { path: string; anchor: number; head: number },
   ): void {
+    const existing = this.cursors.get(participantId);
+    if (existing !== undefined && existing.path !== payload.path) {
+      this.options.clearDecoration(participantId);
+    }
     this.cursors.set(participantId, { ...payload });
     this.options.applyDecoration(participantId, payload.path, payload.anchor, payload.head);
   }

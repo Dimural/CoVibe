@@ -226,6 +226,61 @@ describe('CursorSync — onRemoteCursor', () => {
   });
 });
 
+describe('CursorSync — onRemoteCursor clears old decoration when path changes', () => {
+  it('calls clearDecoration for old file and applyDecoration for new file when participant switches files', () => {
+    const timers = makeTimerHarness();
+    const applyDecoration = vi.fn();
+    const clearDecoration = vi.fn();
+    const opts: CursorSyncOptions = {
+      onDidChangeTextEditorSelection: noopSource,
+      uriToPath: () => undefined,
+      sendCursorUpdate: vi.fn(),
+      applyDecoration,
+      clearDecoration,
+      scheduleTimer: timers.scheduleTimer,
+      cancelTimer: timers.cancelTimer,
+    };
+
+    const sync = new CursorSync(opts);
+
+    // First update: participant on file A
+    sync.onRemoteCursor('alice', { path: 'src/a.ts', anchor: 0, head: 5 });
+    expect(clearDecoration).not.toHaveBeenCalled();
+    expect(applyDecoration).toHaveBeenCalledOnce();
+    expect(applyDecoration).toHaveBeenCalledWith('alice', 'src/a.ts', 0, 5);
+
+    applyDecoration.mockClear();
+
+    // Second update: participant moves to file B
+    sync.onRemoteCursor('alice', { path: 'src/b.ts', anchor: 1, head: 3 });
+    expect(clearDecoration).toHaveBeenCalledOnce();
+    expect(clearDecoration).toHaveBeenCalledWith('alice');
+    expect(applyDecoration).toHaveBeenCalledOnce();
+    expect(applyDecoration).toHaveBeenCalledWith('alice', 'src/b.ts', 1, 3);
+  });
+
+  it('does not call clearDecoration when path is unchanged', () => {
+    const timers = makeTimerHarness();
+    const clearDecoration = vi.fn();
+    const opts: CursorSyncOptions = {
+      onDidChangeTextEditorSelection: noopSource,
+      uriToPath: () => undefined,
+      sendCursorUpdate: vi.fn(),
+      applyDecoration: vi.fn(),
+      clearDecoration,
+      scheduleTimer: timers.scheduleTimer,
+      cancelTimer: timers.cancelTimer,
+    };
+
+    const sync = new CursorSync(opts);
+
+    sync.onRemoteCursor('alice', { path: 'src/a.ts', anchor: 0, head: 5 });
+    sync.onRemoteCursor('alice', { path: 'src/a.ts', anchor: 2, head: 7 });
+
+    expect(clearDecoration).not.toHaveBeenCalled();
+  });
+});
+
 describe('CursorSync — onOtOp transforms cursor positions', () => {
   it('shifts cursors right after an insert at the beginning', () => {
     const timers = makeTimerHarness();
