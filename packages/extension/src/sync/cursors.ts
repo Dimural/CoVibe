@@ -54,6 +54,8 @@ export interface CursorSyncOptions {
 // CursorSync
 // ---------------------------------------------------------------------------
 
+// anchor and head are intentionally mutable (no `readonly`): onOtOp mutates
+// them in place on every OT op to avoid a Map re-set on every transform call.
 interface StoredCursor {
   path: string;
   anchor: number;

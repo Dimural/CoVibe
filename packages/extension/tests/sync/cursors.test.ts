@@ -308,6 +308,33 @@ describe('CursorSync — onOtOp transforms cursor positions', () => {
     expect(applyDecoration).toHaveBeenCalledWith('alice', 'hello.ts', 5, 5);
   });
 
+  it('transforms both anchor and head independently when anchor !== head', () => {
+    const timers = makeTimerHarness();
+    const applyDecoration = vi.fn();
+    const opts: CursorSyncOptions = {
+      onDidChangeTextEditorSelection: noopSource,
+      uriToPath: () => undefined,
+      sendCursorUpdate: vi.fn(),
+      applyDecoration,
+      clearDecoration: vi.fn(),
+      scheduleTimer: timers.scheduleTimer,
+      cancelTimer: timers.cancelTimer,
+    };
+
+    const sync = new CursorSync(opts);
+    // Set up cursor with range selection: anchor=2, head=6
+    sync.onRemoteCursor('alice', { path: 'file.ts', anchor: 2, head: 6 });
+    applyDecoration.mockClear();
+
+    // Insert 'abc' at position 0 (no leading skip); both anchor and head shift right by 3
+    // transformPosition(2, ['abc']) = 5; transformPosition(6, ['abc']) = 9
+    const op: TextOp = ['abc'];
+    sync.onOtOp('file.ts', op);
+
+    expect(applyDecoration).toHaveBeenCalledOnce();
+    expect(applyDecoration).toHaveBeenCalledWith('alice', 'file.ts', 5, 9);
+  });
+
   it('does not process cursors for a different path', () => {
     const timers = makeTimerHarness();
     const applyDecoration = vi.fn();

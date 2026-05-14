@@ -190,9 +190,28 @@ describe('DecorationManager — clear', () => {
     );
     expect(dm.has('alice')).toBe(true);
 
+    const handle = created[0]?.handle;
+    const setDecorationsCallsBefore = editor.setDecorations.mock.calls.length;
+
     dm.clear('alice');
     expect(dm.has('alice')).toBe(false);
     expect(created[0]?.disposeSpy).toHaveBeenCalledOnce();
+
+    // setDecorations(handle, []) must be called before dispose to clear visual artifacts
+    const setDecorationsCallsAfter = editor.setDecorations.mock.calls.length;
+    expect(setDecorationsCallsAfter).toBe(setDecorationsCallsBefore + 1);
+    const lastCall = editor.setDecorations.mock.calls[setDecorationsCallsAfter - 1] as [
+      unknown,
+      unknown[],
+    ];
+    expect(lastCall[0]).toBe(handle);
+    expect(lastCall[1]).toEqual([]);
+
+    // Verify setDecorations([], ...) happened before dispose
+    const disposeOrder = created[0]?.disposeSpy.mock.invocationCallOrder[0] ?? 0;
+    const setDecorationsOrder =
+      editor.setDecorations.mock.invocationCallOrder[setDecorationsCallsAfter - 1] ?? 0;
+    expect(setDecorationsOrder).toBeLessThan(disposeOrder);
   });
 
   it('is a no-op for an unknown participant', () => {
@@ -234,11 +253,36 @@ describe('DecorationManager — clearAll', () => {
       { line: 1, character: 2 },
     );
 
+    const setDecorationsCallsBefore = editor.setDecorations.mock.calls.length;
+
     dm.clearAll();
     expect(dm.has('alice')).toBe(false);
     expect(dm.has('bob')).toBe(false);
     for (const entry of created) {
       expect(entry.disposeSpy).toHaveBeenCalledOnce();
+    }
+
+    // setDecorations(handle, []) must be called for each participant before dispose
+    const clearCalls = editor.setDecorations.mock.calls.slice(setDecorationsCallsBefore) as [
+      DecorationHandle,
+      unknown[],
+    ][];
+    expect(clearCalls).toHaveLength(2);
+    for (const [handle, ranges] of clearCalls) {
+      const matchedEntry = created.find((e) => e.handle === handle);
+      expect(matchedEntry).toBeDefined();
+      expect(ranges).toEqual([]);
+      // Verify setDecorations([]) was called before the corresponding dispose
+      const disposeOrder = matchedEntry!.disposeSpy.mock.invocationCallOrder[0] ?? 0;
+      const clearOrder =
+        editor.setDecorations.mock.invocationCallOrder[
+          editor.setDecorations.mock.calls.indexOf(
+            editor.setDecorations.mock.calls.find(
+              (c) => c[0] === handle && (c[1] as unknown[]).length === 0,
+            )!,
+          )
+        ] ?? 0;
+      expect(clearOrder).toBeLessThan(disposeOrder);
     }
   });
 });
