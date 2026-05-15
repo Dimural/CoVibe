@@ -12,6 +12,7 @@ import type { SessionRegistry, SessionView } from './sessionRegistry.js';
 import { Connection } from './connection.js';
 import { CloseCodes } from './closeCodes.js';
 import { Router } from './router.js';
+import { DocSequencer } from './doc/sequencer.js';
 
 export interface RelayServerDeps {
   config: Config;
@@ -147,6 +148,7 @@ export class RelayServer {
       deps.router ??
       new Router({
         logger: deps.logger,
+        sequencer: new DocSequencer(deps.metrics?.asSequencerMetrics()),
         ...(deps.metrics !== undefined && { metrics: deps.metrics }),
         ...(deps.bufferedAmountThreshold !== undefined && {
           bufferedAmountThreshold: deps.bufferedAmountThreshold,

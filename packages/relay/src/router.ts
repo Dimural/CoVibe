@@ -14,16 +14,23 @@
  */
 
 import { ProtocolError, decode, encode } from '@covibes/protocol';
-import type { AnyDecodedMessage, Envelope, MessageType, MessagePayload } from '@covibes/protocol';
+import type {
+  AnyDecodedMessage,
+  Envelope,
+  MessageType,
+  MessagePayload,
+  DocDeltaPayload,
+} from '@covibes/protocol';
 import { CloseCodes } from './closeCodes.js';
 import type { Connection } from './connection.js';
 import type { Logger } from './log.js';
 import type { Metrics } from './metrics.js';
 import type { SessionView } from './sessionRegistry.js';
+import type { DocSequencer } from './doc/sequencer.js';
+import { SequencerGapError } from './doc/sequencer.js';
 
 /** Set of message types the Router will forward peer-to-peer. */
 export const ROUTABLE_TYPES: ReadonlySet<MessageType> = new Set<MessageType>([
-  'doc.delta',
   'cursor.update',
   'agent.intent',
   'agent.change',
@@ -31,6 +38,8 @@ export const ROUTABLE_TYPES: ReadonlySet<MessageType> = new Set<MessageType>([
   'git.operation',
   'git.ack',
   'conflict.resolve',
+  'doc.snapshot',
+  'doc.resync',
 ]);
 
 /**
@@ -45,6 +54,7 @@ const SERVER_ORIGINATED_TYPES = new Set<string>([
   'session.leave',
   'ping',
   'pong',
+  'doc.ack',
 ]);
 
 const DEFAULT_BUFFERED_AMOUNT_THRESHOLD = 1_048_576; // 1 MiB
@@ -60,6 +70,8 @@ export interface RouterDeps {
   maxMessageBytes?: number; // default 1_048_576
   /** Optional Prometheus metrics instance. When absent, no metrics are recorded. */
   metrics?: Metrics;
+  /** Optional OT sequencer. When provided, doc.delta is processed through it instead of plain forwarding. */
+  sequencer?: DocSequencer;
 }
 
 /** Point-in-time routing counters. All values monotonically increase. */
@@ -87,6 +99,7 @@ export class Router {
   readonly #bufferedAmountThreshold: number;
   readonly #maxMessageBytes: number;
   readonly #metrics: Metrics | undefined;
+  readonly #sequencer: DocSequencer | undefined;
 
   /**
    * Two-level map: sessionId → (participantId → Connection).
@@ -108,6 +121,7 @@ export class Router {
       deps.bufferedAmountThreshold ?? DEFAULT_BUFFERED_AMOUNT_THRESHOLD;
     this.#maxMessageBytes = deps.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES;
     this.#metrics = deps.metrics;
+    this.#sequencer = deps.sequencer;
   }
 
   /**
@@ -137,6 +151,7 @@ export class Router {
         map.delete(conn.participantId);
         if (map.size === 0) {
           this.#sessions.delete(conn.sessionId);
+          this.#sequencer?.disposeSession(conn.sessionId);
         }
       }
     });
@@ -278,6 +293,17 @@ export class Router {
     const { type } = decoded;
 
     // Step 3: type routing decision.
+
+    // doc.delta is intercepted for OT sequencing (or plain forwarding when no sequencer).
+    if (type === 'doc.delta') {
+      if (this.#sequencer) {
+        this.#routeDeltaViaSequencer(senderConn, decoded.payload);
+      } else {
+        this.#forwardToPeers(senderConn, decoded.envelope);
+      }
+      return;
+    }
+
     if (ROUTABLE_TYPES.has(type)) {
       // Forward to peers.
       this.#forwardToPeers(senderConn, decoded.envelope);
@@ -307,11 +333,85 @@ export class Router {
     );
   }
 
+  #routeDeltaViaSequencer(senderConn: Connection, payload: DocDeltaPayload): void {
+    try {
+      this.#sequencer!.process(senderConn.sessionId, payload, {
+        sendToSender: (type, ackPayload) => {
+          this.sendToParticipant(senderConn.sessionId, senderConn.participantId, type, ackPayload);
+        },
+        broadcastToPeers: (type, deltaPayload) => {
+          const sessionMap = this.#sessions.get(senderConn.sessionId);
+          if (!sessionMap) return;
+          let encoded: string;
+          try {
+            encoded = this.#encodeWithFrom(type, deltaPayload, senderConn.participantId);
+          } catch (err: unknown) {
+            this.#logger.error({ err, type }, 'encode failed in sequencer broadcastToPeers');
+            return;
+          }
+          const byteLength = Buffer.byteLength(encoded, 'utf8');
+          for (const [peerId, peerConn] of sessionMap) {
+            if (peerId === senderConn.participantId) continue;
+            if (peerConn.bufferedAmount > this.#bufferedAmountThreshold) {
+              this.#droppedForBackpressure++;
+              this.#metrics?.dropped_for_backpressure_total.inc();
+              this.#logger.warn(
+                {
+                  peerParticipantId: peerId,
+                  bufferedAmount: peerConn.bufferedAmount,
+                  threshold: this.#bufferedAmountThreshold,
+                },
+                'peer backpressure threshold exceeded — closing peer',
+              );
+              peerConn.close(CloseCodes.SlowConsumer, 'backpressure');
+              continue;
+            }
+            if (peerConn.send(encoded)) {
+              this.#messagesRouted++;
+              this.#bytesRouted += byteLength;
+              this.#metrics?.messages_routed_total.inc({ type });
+              this.#metrics?.bytes_routed_total.inc(byteLength);
+            }
+          }
+        },
+      });
+    } catch (err: unknown) {
+      if (err instanceof SequencerGapError) {
+        this.#logger.warn(
+          { err, sessionId: senderConn.sessionId },
+          'doc.delta gap — client needs resync',
+        );
+        this.#sendError(
+          senderConn,
+          'doc.gap',
+          'document too far behind; request a full snapshot',
+          true,
+        );
+      } else {
+        this.#logger.error(
+          { err, sessionId: senderConn.sessionId },
+          'sequencer error on doc.delta',
+        );
+        this.#sendError(senderConn, 'internal', 'sequencer error', true);
+      }
+    }
+  }
+
+  /** Encode a typed message and inject the relay's `from` field (sender attribution). */
+  #encodeWithFrom<T extends MessageType>(
+    type: T,
+    payload: MessagePayload<T>,
+    from: string,
+  ): string {
+    const bare = encode(type, payload);
+    const env = JSON.parse(bare) as Record<string, unknown>;
+    return JSON.stringify({ ...env, from });
+  }
+
   #forwardToPeers(senderConn: Connection, envelope: Envelope): void {
     const sessionMap = this.#sessions.get(senderConn.sessionId);
     if (!sessionMap) return;
 
-    // Re-serialize with `from` injected.
     // Overwrite (or set) from — never trust the client's value.
     const envelopeWithFrom = JSON.stringify({ ...envelope, from: senderConn.participantId });
     const byteLength = Buffer.byteLength(envelopeWithFrom, 'utf8');

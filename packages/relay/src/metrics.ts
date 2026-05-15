@@ -1,4 +1,12 @@
-import { Counter, Gauge, Registry, collectDefaultMetrics } from 'prom-client';
+import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
+
+/**
+ * Interface for the DocSequencer to record its processing duration.
+ * Kept minimal so DocSequencer does not depend on the full Metrics class.
+ */
+export interface SequencerMetrics {
+  recordProcessDuration(durationSeconds: number): void;
+}
 
 /**
  * Prometheus metrics for the CoVibes relay.
@@ -37,6 +45,12 @@ export class Metrics {
 
   /** Protocol errors observed, labeled by error code. */
   readonly protocol_errors_total: Counter<'code'>;
+
+  /**
+   * Server-side processing latency of {@link DocSequencer.process} calls.
+   * Buckets cover 100µs to 100ms in roughly an order-of-magnitude spread.
+   */
+  readonly ot_sequencer_process_duration_seconds: Histogram<never>;
 
   constructor() {
     this.registry = new Registry();
@@ -86,6 +100,22 @@ export class Metrics {
       labelNames: ['code'] as const,
       registers: [this.registry],
     });
+
+    this.ot_sequencer_process_duration_seconds = new Histogram({
+      name: 'covibes_relay_ot_sequencer_process_duration_seconds',
+      help: 'Wall-clock duration of DocSequencer.process() calls in seconds.',
+      buckets: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1],
+      registers: [this.registry],
+    });
+  }
+
+  /** Returns a {@link SequencerMetrics} adapter backed by this instance. */
+  asSequencerMetrics(): SequencerMetrics {
+    return {
+      recordProcessDuration: (durationSeconds: number) => {
+        this.ot_sequencer_process_duration_seconds.observe(durationSeconds);
+      },
+    };
   }
 
   /** Render Prometheus exposition format. */
