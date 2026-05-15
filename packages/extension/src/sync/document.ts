@@ -61,12 +61,14 @@ export class SyncedDocument {
    * Reset the document to a new base text and version.
    *
    * Called on full-document resync (Task 4.7) after receiving a `doc.snapshot`.
-   * Pending and acked op buffers are not cleared here — the OT engine may choose
-   * to replay or discard them after calling this.
+   * Clears both the pending and acked op buffers, since all buffered ops are
+   * invalid after a full resync — the editor text has been replaced wholesale.
    */
   reset(newText: string, newVersion: number): void {
     this._baseText = newText;
     this._version = newVersion;
+    this._pendingOps.length = 0;
+    this._ackedOps.length = 0;
   }
 
   /** Current document version (engine-managed). Starts at 0. */

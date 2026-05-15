@@ -57,11 +57,9 @@ export async function applySnapshot(
   const applyDoc = deps.getDocument(syncedDoc.uri);
   if (applyDoc === undefined) return;
 
-  // Reset the synced document state first
-  syncedDoc.reset(payload.text, payload.serverVersion);
-
   // Build a full-document replace WorkspaceEdit
   const edit = deps.createEdit();
+  // VS Code guarantees lineCount >= 1 for any open document.
   const lastLine = applyDoc.lineCount - 1;
   const lastChar = applyDoc.lineAt(lastLine).range.end.character;
   edit.replace(
@@ -74,5 +72,8 @@ export async function applySnapshot(
   const ok = await deps.applyEdit(edit);
   if (!ok) {
     deps.logger.warn({ uri: syncedDoc.uri.toString() }, 'applySnapshot: WorkspaceEdit failed');
+    return;
   }
+  // Only update in-memory state after the editor text is successfully replaced.
+  syncedDoc.reset(payload.text, payload.serverVersion);
 }

@@ -194,9 +194,9 @@ describe('applySnapshot', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 4. applyEdit returns false → logger.warn is called
+  // 4. applyEdit returns false → logger.warn is called, reset NOT called
   // -------------------------------------------------------------------------
-  it('applyEdit returns false: logger.warn is called', async () => {
+  it('applyEdit returns false: logger.warn is called, syncedDoc.reset is NOT called', async () => {
     const text = 'some content';
     const uri = Uri.file('/ws/file.ts');
     const syncedDoc = new SyncedDocument({ uri, baseText: text });
@@ -212,6 +212,34 @@ describe('applySnapshot', () => {
     const warnArgs = warnMock.mock.calls[0] as [Record<string, unknown>, string];
     expect(warnArgs[0]).toHaveProperty('uri');
     expect(typeof warnArgs[1]).toBe('string');
+    // In-memory state must NOT have been updated since the editor text was not replaced
+    expect(syncedDoc.baseText).toBe(text);
+    expect(syncedDoc.version).toBe(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // 6. Empty document — range is (0,0)→(0,0)
+  // -------------------------------------------------------------------------
+  it('handles empty document: range is (0,0)→(0,0), replaces with snapshot text', async () => {
+    const doc = makeResyncDoc('', '/ws/empty.ts');
+    const syncedDoc = new SyncedDocument({ uri: doc.uri, baseText: '' });
+    const { builder, calls } = makeEditBuilder();
+    const { deps } = makeDeps(doc, builder);
+
+    await applySnapshot(
+      syncedDoc,
+      { path: 'empty.ts', serverVersion: 0, text: 'new content' },
+      deps,
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      startLine: 0,
+      startChar: 0,
+      endLine: 0,
+      endChar: 0,
+      newText: 'new content',
+    });
   });
 
   // -------------------------------------------------------------------------
