@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { applyOp, transformOp } from '@covibes/protocol';
 import type { TextOp } from '@covibes/protocol';
 import { DocSequencer, SequencerGapError } from '../../src/doc/sequencer.js';
 import type { SequencerCallbacks } from '../../src/doc/sequencer.js';
+import type { SequencerMetrics } from '../../src/metrics.js';
 
 // ---------------------------------------------------------------------------
 // Helper: build a capture-based callbacks implementation
@@ -237,7 +238,61 @@ describe('cross-path independence', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. Verify the OT transformation formula directly
+// 6. SequencerMetrics — recordProcessDuration is called on each process()
+// ---------------------------------------------------------------------------
+
+describe('SequencerMetrics instrumentation', () => {
+  it('calls recordProcessDuration once per process() call', () => {
+    const recordProcessDuration = vi.fn<(durationSeconds: number) => void>();
+    const metrics: SequencerMetrics = { recordProcessDuration };
+
+    const seq = new DocSequencer(metrics);
+    const { callbacks } = makeCallbacks();
+
+    seq.process('sess-metrics', { path: 'src/a.ts', baseVersion: 0, op: ['x'] }, callbacks);
+
+    expect(recordProcessDuration).toHaveBeenCalledTimes(1);
+    const [duration] = recordProcessDuration.mock.calls[0]!;
+    expect(duration).toBeGreaterThanOrEqual(0);
+    // Sanity: single process() call should take well under 1 second.
+    expect(duration).toBeLessThan(1);
+  });
+
+  it('calls recordProcessDuration even when process() throws a SequencerGapError', () => {
+    const recordProcessDuration = vi.fn<(durationSeconds: number) => void>();
+    const metrics: SequencerMetrics = { recordProcessDuration };
+    const seq = new DocSequencer(metrics);
+
+    // Fill revLog to evict early entries.
+    for (let i = 0; i < 101; i++) {
+      const { callbacks } = makeCallbacks();
+      seq.process('sess-metrics-gap', { path: 'src/a.ts', baseVersion: i, op: ['x'] }, callbacks);
+    }
+
+    recordProcessDuration.mockClear();
+
+    const { callbacks } = makeCallbacks();
+    expect(() =>
+      seq.process('sess-metrics-gap', { path: 'src/a.ts', baseVersion: 0, op: ['y'] }, callbacks),
+    ).toThrow(SequencerGapError);
+
+    // Duration must still be recorded despite the throw.
+    expect(recordProcessDuration).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call recordProcessDuration when no metrics are provided', () => {
+    // Constructing without metrics should work without errors.
+    const seq = new DocSequencer();
+    const { senderMessages, callbacks } = makeCallbacks();
+    expect(() =>
+      seq.process('sess-no-metrics', { path: 'src/a.ts', baseVersion: 0, op: ['x'] }, callbacks),
+    ).not.toThrow();
+    expect(senderMessages).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Verify the OT transformation formula directly
 // ---------------------------------------------------------------------------
 
 describe('OT transform correctness', () => {

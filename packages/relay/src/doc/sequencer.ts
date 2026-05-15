@@ -1,5 +1,6 @@
 import { transformOp, normalizeOp } from '@covibes/protocol';
 import type { TextOp, DocDeltaPayload, MessageType, MessagePayload } from '@covibes/protocol';
+import type { SequencerMetrics } from '../metrics.js';
 
 export class SequencerGapError extends Error {
   constructor(sessionId: string, path: string, baseVersion: number, oldestKnown: number) {
@@ -31,6 +32,11 @@ export interface SequencerCallbacks {
 export class DocSequencer {
   // sessionId → (path → DocState)
   readonly #state: Map<string, Map<string, DocState>> = new Map();
+  readonly #metrics: SequencerMetrics | undefined;
+
+  constructor(metrics?: SequencerMetrics) {
+    this.#metrics = metrics;
+  }
 
   #getOrCreate(sessionId: string, path: string): DocState {
     let sessionMap = this.#state.get(sessionId);
@@ -47,6 +53,17 @@ export class DocSequencer {
   }
 
   process(sessionId: string, payload: DocDeltaPayload, callbacks: SequencerCallbacks): void {
+    const startTime = Date.now();
+    try {
+      this.#processInner(sessionId, payload, callbacks);
+    } finally {
+      if (this.#metrics !== undefined) {
+        this.#metrics.recordProcessDuration((Date.now() - startTime) / 1000);
+      }
+    }
+  }
+
+  #processInner(sessionId: string, payload: DocDeltaPayload, callbacks: SequencerCallbacks): void {
     const { path, baseVersion, op } = payload;
     const state = this.#getOrCreate(sessionId, path);
 

@@ -148,7 +148,7 @@ export class RelayServer {
       deps.router ??
       new Router({
         logger: deps.logger,
-        sequencer: new DocSequencer(),
+        sequencer: new DocSequencer(deps.metrics?.asSequencerMetrics()),
         ...(deps.metrics !== undefined && { metrics: deps.metrics }),
         ...(deps.bufferedAmountThreshold !== undefined && {
           bufferedAmountThreshold: deps.bufferedAmountThreshold,
