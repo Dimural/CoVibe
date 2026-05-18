@@ -145,6 +145,13 @@ export function activate(context: vscode.ExtensionContext): void {
       onAgentStatusChange: (statuses) => {
         sessionPanel.updateAgentStatus(statuses);
         agentDecorationMgr.clearAll();
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
+        explorerBadges.clearAll(workspaceRoot);
+        for (const [participantId, status] of Object.entries(statuses)) {
+          if (!status.agentActive) continue;
+          const path = coordinatorRef.current?.getActiveIntentPath(participantId);
+          if (path) explorerBadges.setActive(path, participantId, workspaceRoot);
+        }
       },
       openConflictView: (conflictId, path, leftText, rightText, baseText, peers) => {
         const view = new ConflictView({

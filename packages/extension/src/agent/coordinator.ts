@@ -181,6 +181,10 @@ export class AgentCoordinator {
     this.detector.clearAll();
   }
 
+  getActiveIntentPath(participantId: string): string | undefined {
+    return this.remoteIntents.get(participantId)?.path;
+  }
+
   private buildStatusMap(): Record<string, { agentActive: boolean; agentSourced: boolean }> {
     return Object.fromEntries(this.agentStatuses);
   }
