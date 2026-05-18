@@ -10,6 +10,7 @@ export const AgentIntentPayload = z
   .object({
     path: RelPath,
     description: z.string().min(1).max(280),
+    agentSourced: z.boolean().optional(),
   })
   .strict();
 export type AgentIntentPayload = z.infer<typeof AgentIntentPayload>;

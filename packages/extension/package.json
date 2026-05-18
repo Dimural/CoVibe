@@ -52,13 +52,55 @@
           "default": true,
           "description": "Enable heuristic AI agent detection"
         },
+        "covibes.agentDetection.minEditsPerSecond": {
+          "type": "number",
+          "default": 3,
+          "description": "Minimum edits per second to classify a burst as agent-like"
+        },
+        "covibes.agentDetection.minInsertionChars": {
+          "type": "number",
+          "default": 200,
+          "description": "Minimum characters inserted in a single edit to classify as agent-like"
+        },
+        "covibes.agentDetection.minAffectedLines": {
+          "type": "number",
+          "default": 5,
+          "description": "Minimum lines affected by a single edit to classify as agent-like"
+        },
+        "covibes.agentDetection.terminalPatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Claude*",
+            "Aider*",
+            "Cursor*",
+            "GitHub Copilot*",
+            "Copilot*",
+            "Devin*",
+            "Cody*"
+          ],
+          "description": "Glob patterns matched against terminal names to identify agent terminals"
+        },
         "covibes.gracePeriodSeconds": {
           "type": "number",
           "default": 1800,
           "description": "Seconds to keep a session open after the last participant disconnects"
         }
       }
-    }
+    },
+    "virtualDocuments": [
+      {
+        "viewType": "covibes-conflict",
+        "displayName": "CoVibes Conflict Resolution",
+        "selector": [
+          {
+            "scheme": "covibes-conflict"
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "build": "node esbuild.config.mjs",
