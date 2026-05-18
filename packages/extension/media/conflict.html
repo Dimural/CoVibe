@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="{{CSP}}" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CoVibes — Conflict Resolution</title>
+    <link rel="stylesheet" href="{{STYLES_URI}}" />
+  </head>
+  <body>
+    <div id="header">
+      <span id="conflict-file"></span>
+      <span id="conflict-subtitle">Review both versions and resolve in the center panel</span>
+    </div>
+    <div id="panels">
+      <div class="panel" id="left-panel">
+        <div class="panel-header">YOUR VERSION</div>
+        <pre class="panel-content" id="left-content"></pre>
+      </div>
+      <div class="panel center-panel" id="center-panel">
+        <div class="panel-header">
+          RESOLUTION <span id="resolved-badge" class="resolved-badge hidden">✓ resolved</span>
+        </div>
+        <textarea id="center-content" spellcheck="false"></textarea>
+      </div>
+      <div class="panel" id="right-panel">
+        <div class="panel-header">THEIR VERSION</div>
+        <pre class="panel-content" id="right-content"></pre>
+      </div>
+    </div>
+    <div id="toolbar">
+      <div id="toolbar-actions">
+        <button id="take-mine" class="btn">← Take Mine</button>
+        <button id="take-theirs" class="btn">Take Theirs →</button>
+      </div>
+      <div id="toolbar-confirm">
+        <div id="confirm-status"></div>
+        <button id="confirm-btn" class="btn btn-primary" disabled>✓ Confirm Resolution</button>
+        <button id="cancel-btn" class="btn btn-danger">✗ Cancel</button>
+      </div>
+    </div>
+    <script src="{{SCRIPT_URI}}"></script>
+  </body>
+</html>
