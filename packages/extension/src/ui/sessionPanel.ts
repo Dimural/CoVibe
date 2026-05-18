@@ -28,7 +28,7 @@ export function buildParticipantListHtml(participants: ParticipantView[]): strin
         ? `<span class="participant-file">${escapeHtml(p.currentFile)}</span>`
         : '';
       return (
-        `<li class="participant">` +
+        `<li class="participant" data-participant-id="${escapeHtml(p.id)}">` +
         `<span class="color-dot" style="background-color: ${escapeHtml(p.color)}"></span>` +
         `<span class="participant-name">${escapeHtml(p.displayName)}</span>` +
         fileSpan +
@@ -81,6 +81,13 @@ export class SessionPanel {
   update(state: SessionState): void {
     if (!this.panel) return;
     this.postState(state);
+  }
+
+  updateAgentStatus(
+    agentStatuses: Record<string, { agentActive: boolean; agentSourced: boolean }>,
+  ): void {
+    if (!this.panel) return;
+    void this.panel.webview.postMessage({ type: 'agentUpdate', agents: agentStatuses });
   }
 
   dispose(): void {

@@ -13,7 +13,7 @@ describe('buildParticipantListHtml', () => {
     const result = buildParticipantListHtml(participants);
     expect(result).toContain('Alice');
     expect(result).toContain('#ff0000');
-    expect(result).toContain('<li class="participant">');
+    expect(result).toContain('<li class="participant" data-participant-id="p1">');
     expect(result).toContain('class="color-dot"');
     expect(result).toContain('class="participant-name"');
   });

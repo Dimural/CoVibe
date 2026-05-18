@@ -57,3 +57,22 @@ h2 {
   font-size: 12px;
   margin: 0 0 16px 0;
 }
+
+.agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  margin-left: auto;
+}
+
+.agent-chip.sourced {
+  background-color: color-mix(in srgb, var(--vscode-editorWarning-foreground) 20%, transparent);
+  color: var(--vscode-editorWarning-foreground);
+  font-weight: 600;
+}
