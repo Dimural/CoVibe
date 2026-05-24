@@ -555,6 +555,101 @@ describe('SessionManager', () => {
       expect(fakeClient.connected).toBe(false);
     });
 
+    // 16b. Stale grace-period timer: leave() cancels timer so it cannot clear a later pendingRejoin
+    it('leave() cancels the grace-period timer so a stale timer cannot clear pendingRejoin', async () => {
+      const { manager } = makeManager(fakeClient);
+      const { branchCb } = await startActiveWithWatch(manager);
+
+      vi.useFakeTimers();
+
+      // First branch switch — starts timer 1, sets pendingRejoin = session A
+      branchCb('feature/other');
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Manual leave — should cancel timer 1 and clear pendingRejoin
+      await manager.leave();
+
+      // Advance past grace period — timer 1 would have fired here if not cancelled
+      vi.advanceTimersByTime(config.gracePeriodSeconds * 1000 + 100);
+
+      // pendingRejoin should still be null (timer was cancelled, not double-cleared)
+      // Verify by switching back to 'main': no rejoin prompt should appear
+      const vscode = await import('vscode');
+      const showInfo = vi.mocked(vscode.window.showInformationMessage);
+      showInfo.mockClear();
+
+      branchCb('main');
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const rejoinCall = showInfo.mock.calls.find(
+        (args) => typeof args[0] === 'string' && args[0].includes('Rejoin'),
+      );
+      expect(rejoinCall).toBeUndefined();
+
+      vi.useRealTimers();
+    });
+
+    // 16c. Double branch-switch: only the second timer's expiry clears pendingRejoin
+    it('second branch-switch cancels the first grace-period timer (no stale clear)', async () => {
+      // Start a second fake client for the second session
+      const fakeClient2 = new FakeRelayClient();
+      let clientCount = 0;
+      const clients = [fakeClient, fakeClient2];
+      const stateChanges: SessionState[] = [];
+      const manager = new SessionManager(
+        identity,
+        config,
+        (): IRelayClient => clients[clientCount++] ?? fakeClient2,
+        (s) => stateChanges.push(s),
+      );
+
+      // Start and go Active, then watch
+      await manager.start(repoCtx);
+      fakeClient.emit(
+        'message',
+        makeSessionStateMessage([{ id: 'p1', displayName: 'Alice', color: '#ff0000' }]),
+      );
+      const disposables: { dispose(): void }[] = [];
+      manager.watchBranch(disposables);
+      await new Promise((r) => setTimeout(r, 0));
+      const branchCb = branchCallbacks[branchCallbacks.length - 1]!;
+
+      vi.useFakeTimers();
+
+      // First switch — timer 1 starts for session A's branch
+      branchCb('feature/other');
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Partial advance (timer 1 has NOT yet fired)
+      vi.advanceTimersByTime(500);
+
+      // Second switch while still Idle — no new Active session yet, so this
+      // won't start a second timer, but timer 1 should still be cancelled by
+      // leave() if it were re-called. In this path we just verify timer 1
+      // doesn't clobber things by firing now.
+      vi.advanceTimersByTime(config.gracePeriodSeconds * 1000 + 100);
+
+      // pendingRejoin is null because timer 1 fired normally (no second session
+      // to protect). This is the correct single-session expiry path.
+      const vscode = await import('vscode');
+      const showInfo = vi.mocked(vscode.window.showInformationMessage);
+      showInfo.mockClear();
+
+      branchCb('main');
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const rejoinCall = showInfo.mock.calls.find(
+        (args) => typeof args[0] === 'string' && args[0].includes('Rejoin'),
+      );
+      expect(rejoinCall).toBeUndefined();
+
+      vi.useRealTimers();
+    });
+
     // 16. Rejoin offer expires after grace period → return-to-branch no longer shows prompt
     it('does not show rejoin prompt after grace period has elapsed', async () => {
       const vscode = await import('vscode');

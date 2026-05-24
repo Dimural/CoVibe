@@ -116,6 +116,13 @@ export class SessionManager {
    */
   private pendingRejoin: { branch: string; inviteLink: string } | null = null;
 
+  /**
+   * Handle for the grace-period timer started after a branch-switch leave.
+   * Tracked here so stale timers can be cancelled before starting a new one,
+   * and so leave() can cancel it on a manual/voluntary leave.
+   */
+  private gracePeriodTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(
     private readonly identity: ParticipantIdentity,
     private readonly config: CoVibesConfig,
@@ -204,6 +211,14 @@ export class SessionManager {
    *   voluntary leaves. Pass `'branch-switch'` when the user switched branches.
    */
   async leave(reason: 'user' | 'branch-switch' | 'shutdown' = 'user'): Promise<void> {
+    // Cancel any pending grace-period timer so a stale callback cannot clear
+    // a subsequent session's pendingRejoin data.
+    if (this.gracePeriodTimer !== null) {
+      clearTimeout(this.gracePeriodTimer);
+      this.gracePeriodTimer = null;
+      this.pendingRejoin = null;
+    }
+
     if (this.state.kind !== 'Active' && this.state.kind !== 'Reconnecting') {
       return;
     }
@@ -243,6 +258,11 @@ export class SessionManager {
       const { watchBranchChanges } = await import('../git/context.js');
 
       const watcher = await watchBranchChanges((newBranch: string) => {
+        // NOTE: Branch switches that arrive while the session is in the
+        // Connecting state are intentionally ignored here. The session has not
+        // yet received server confirmation (session.state), so there is no
+        // meaningful in-progress collaboration to protect. Once connected the
+        // normal Active/Reconnecting path below handles future switches.
         if (this.state.kind === 'Active' || this.state.kind === 'Reconnecting') {
           // Capture session info before leaving so we can offer to rejoin later.
           const sessionInviteLink = this.state.inviteLink;
@@ -263,11 +283,20 @@ export class SessionManager {
           // Offer rejoin only when we switched away from the session branch.
           if (sessionBranchName !== null && sessionBranchName !== newBranch) {
             this.pendingRejoin = { branch: sessionBranchName, inviteLink: sessionInviteLink };
-            const timer: NodeJS.Timeout = setTimeout(() => {
+
+            // Cancel any previous grace-period timer before starting a new
+            // one. Without this, a stale timer from an earlier branch-switch
+            // could fire and null out the pendingRejoin that belongs to the
+            // most-recent switch (the "double-switch" timer-leak bug).
+            if (this.gracePeriodTimer !== null) {
+              clearTimeout(this.gracePeriodTimer);
+            }
+            this.gracePeriodTimer = setTimeout(() => {
+              this.gracePeriodTimer = null;
               this.pendingRejoin = null;
             }, this.config.gracePeriodSeconds * 1000);
             // Avoid blocking Node.js exit in tests
-            timer.unref();
+            this.gracePeriodTimer.unref();
           }
         } else if (
           this.pendingRejoin !== null &&
