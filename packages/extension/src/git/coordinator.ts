@@ -271,6 +271,32 @@ export class GitCoordinator {
   }
 
   /**
+   * Handles a peer disconnecting from the session.
+   *
+   * If a push is in progress and the departing peer has not yet acked,
+   * their absence is treated as an implicit confirmation (graceful degradation).
+   * This prevents `coordinatePush` from hanging indefinitely when a peer drops.
+   *
+   * @param participantId - The ID of the peer who left.
+   */
+  onPeerLeft(participantId: string): void {
+    if (this.pendingPush === null) return;
+
+    const { pendingPeerIds, settle } = this.pendingPush;
+
+    if (!pendingPeerIds.has(participantId)) return;
+
+    pendingPeerIds.delete(participantId);
+
+    if (pendingPeerIds.size === 0) {
+      // All remaining peers have confirmed or left — proceed with push
+      this.pendingPush = null;
+      settle(undefined);
+    }
+    // Otherwise wait for the remaining peers
+  }
+
+  /**
    * Handles an incoming `git.ack` message from a peer.
    *
    * - When `ack.kind === 'commit'` and `ack.cancelled === true`, the in-flight

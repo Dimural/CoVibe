@@ -418,6 +418,47 @@ describe('GitCoordinator', () => {
 
       expect(showError).toHaveBeenCalledWith('Push failed: remote rejected');
     });
+
+    it('onPeerLeft: sole pending peer leaves → doPush is called (implicit confirm)', async () => {
+      const doPush = vi.fn().mockResolvedValue(undefined);
+      const options = makeOptions({
+        doPush,
+        getPeers: vi.fn().mockReturnValue([{ id: 'peer-1', displayName: 'Alice' }]),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      const pushPromise = coordinator.coordinatePush();
+      // Peer disconnects before acking
+      coordinator.onPeerLeft('peer-1');
+      await pushPromise;
+
+      expect(doPush).toHaveBeenCalledTimes(1);
+    });
+
+    it('onPeerLeft: one of two peers leaves → doPush not yet called; remaining peer confirms → doPush called', async () => {
+      const doPush = vi.fn().mockResolvedValue(undefined);
+      const options = makeOptions({
+        doPush,
+        getPeers: vi.fn().mockReturnValue([
+          { id: 'peer-1', displayName: 'Alice' },
+          { id: 'peer-2', displayName: 'Bob' },
+        ]),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      const pushPromise = coordinator.coordinatePush();
+
+      // Alice disconnects — Bob still pending
+      coordinator.onPeerLeft('peer-1');
+      // doPush must NOT have been called yet (Bob hasn't responded)
+      expect(doPush).not.toHaveBeenCalled();
+
+      // Bob confirms
+      coordinator.onAck({ kind: 'push', cancelled: false, participantId: 'peer-2' });
+      await pushPromise;
+
+      expect(doPush).toHaveBeenCalledTimes(1);
+    });
   });
 
   // -------------------------------------------------------------------------
