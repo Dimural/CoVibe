@@ -16,11 +16,11 @@
 
 /** Discriminated union of every failure that a Git operation can produce. */
 export type GitOperationError =
-  | { kind: 'no-repo' }
+  | { kind: 'no-repo'; message: string }
+  | { kind: 'git-ext-unavailable'; message: string }
   | { kind: 'commit-failed'; message: string }
   | { kind: 'push-failed'; message: string }
-  | { kind: 'pull-failed'; message: string }
-  | { kind: 'git-ext-unavailable' };
+  | { kind: 'pull-failed'; message: string };
 
 // ---------------------------------------------------------------------------
 // Internal structural types for the VS Code Git extension API subset we use.
@@ -69,12 +69,12 @@ async function resolveRepo(): Promise<GitRepo | GitOperationError> {
   const gitApi = gitExt?.exports?.getAPI(1);
 
   if (gitApi === undefined) {
-    return { kind: 'git-ext-unavailable' };
+    return { kind: 'git-ext-unavailable', message: 'VS Code Git extension is not available.' };
   }
 
   const repo = gitApi.repositories[0];
   if (repo === undefined) {
-    return { kind: 'no-repo' };
+    return { kind: 'no-repo', message: 'No Git repository found in the current workspace.' };
   }
 
   return repo;
@@ -91,11 +91,13 @@ async function resolveRepo(): Promise<GitRepo | GitOperationError> {
  * Exported with `_` prefix to signal "testing only".
  */
 export function _currentBranchPure(repo: GitRepo | undefined): Promise<string | GitOperationError> {
-  if (repo === undefined) return Promise.resolve({ kind: 'no-repo' });
+  if (repo === undefined)
+    return Promise.resolve({
+      kind: 'no-repo',
+      message: 'No Git repository found in the current workspace.',
+    });
 
-  const name = repo.state.HEAD?.name;
-  if (name === undefined) return Promise.resolve({ kind: 'no-repo' });
-
+  const name = repo.state.HEAD?.name ?? 'HEAD';
   return Promise.resolve(name);
 }
 
@@ -106,7 +108,11 @@ export function _currentBranchPure(repo: GitRepo | undefined): Promise<string | 
  * Exported with `_` prefix to signal "testing only".
  */
 export function _dirtyFilesPure(repo: GitRepo | undefined): Promise<string[] | GitOperationError> {
-  if (repo === undefined) return Promise.resolve({ kind: 'no-repo' });
+  if (repo === undefined)
+    return Promise.resolve({
+      kind: 'no-repo',
+      message: 'No Git repository found in the current workspace.',
+    });
 
   const paths = new Set<string>();
   for (const change of repo.state.workingTreeChanges) {
@@ -130,10 +136,11 @@ export async function _gitCommitPure(
   message: string,
   files?: string[],
 ): Promise<void | GitOperationError> {
-  if (repo === undefined) return { kind: 'no-repo' };
+  if (repo === undefined)
+    return { kind: 'no-repo', message: 'No Git repository found in the current workspace.' };
 
   try {
-    const opts = files !== undefined ? { all: false } : undefined;
+    const opts = files !== undefined && files.length > 0 ? { all: false } : undefined;
     await repo.commit(message, opts);
   } catch (err) {
     return { kind: 'commit-failed', message: errorMessage(err) };
@@ -146,7 +153,8 @@ export async function _gitCommitPure(
  * Exported with `_` prefix to signal "testing only".
  */
 export async function _gitPushPure(repo: GitRepo | undefined): Promise<void | GitOperationError> {
-  if (repo === undefined) return { kind: 'no-repo' };
+  if (repo === undefined)
+    return { kind: 'no-repo', message: 'No Git repository found in the current workspace.' };
 
   try {
     await repo.push();
@@ -161,7 +169,8 @@ export async function _gitPushPure(repo: GitRepo | undefined): Promise<void | Gi
  * Exported with `_` prefix to signal "testing only".
  */
 export async function _gitPullPure(repo: GitRepo | undefined): Promise<void | GitOperationError> {
-  if (repo === undefined) return { kind: 'no-repo' };
+  if (repo === undefined)
+    return { kind: 'no-repo', message: 'No Git repository found in the current workspace.' };
 
   try {
     await repo.pull();

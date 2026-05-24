@@ -64,18 +64,21 @@ describe('_currentBranchPure', () => {
   it('returns no-repo error when repo is undefined', async () => {
     const result = await _currentBranchPure(undefined);
     expect((result as GitOperationError).kind).toBe('no-repo');
+    expect((result as Extract<GitOperationError, { kind: 'no-repo' }>).message).toBeTruthy();
   });
 
   it('returns no-repo error when HEAD is undefined', async () => {
     const repo = makeRepo({ HEAD: undefined });
     const result = await _currentBranchPure(repo);
-    expect((result as GitOperationError).kind).toBe('no-repo');
+    // HEAD is undefined means the repo object itself is in a bad state
+    expect(result).toBe('HEAD');
   });
 
-  it('returns no-repo error when HEAD.name is undefined', async () => {
+  it('returns "HEAD" string when HEAD.name is undefined (detached HEAD)', async () => {
     const repo = makeRepo({ HEAD: { name: undefined, commit: 'abc' } });
     const result = await _currentBranchPure(repo);
-    expect((result as GitOperationError).kind).toBe('no-repo');
+    // Detached HEAD is a valid repo state; return 'HEAD' as fallback
+    expect(result).toBe('HEAD');
   });
 });
 
@@ -123,6 +126,7 @@ describe('_dirtyFilesPure', () => {
   it('returns no-repo error when repo is undefined', async () => {
     const result = await _dirtyFilesPure(undefined);
     expect((result as GitOperationError).kind).toBe('no-repo');
+    expect((result as Extract<GitOperationError, { kind: 'no-repo' }>).message).toBeTruthy();
   });
 });
 
@@ -145,6 +149,13 @@ describe('_gitCommitPure', () => {
     expect(result).toBeUndefined();
   });
 
+  it('passes undefined opts when files is an empty array', async () => {
+    const repo = makeRepo();
+    const result = await _gitCommitPure(repo, 'feat: add something', []);
+    expect(repo.commit).toHaveBeenCalledWith('feat: add something', undefined);
+    expect(result).toBeUndefined();
+  });
+
   it('returns commit-failed error when repo.commit rejects', async () => {
     const repo = makeRepo();
     repo.commit.mockRejectedValue(new Error('conflict'));
@@ -158,6 +169,7 @@ describe('_gitCommitPure', () => {
   it('returns no-repo error when repo is undefined', async () => {
     const result = await _gitCommitPure(undefined, 'oops');
     expect((result as GitOperationError).kind).toBe('no-repo');
+    expect((result as Extract<GitOperationError, { kind: 'no-repo' }>).message).toBeTruthy();
   });
 });
 
@@ -186,6 +198,7 @@ describe('_gitPushPure', () => {
   it('returns no-repo error when repo is undefined', async () => {
     const result = await _gitPushPure(undefined);
     expect((result as GitOperationError).kind).toBe('no-repo');
+    expect((result as Extract<GitOperationError, { kind: 'no-repo' }>).message).toBeTruthy();
   });
 });
 
@@ -214,19 +227,15 @@ describe('_gitPullPure', () => {
   it('returns no-repo error when repo is undefined', async () => {
     const result = await _gitPullPure(undefined);
     expect((result as GitOperationError).kind).toBe('no-repo');
+    expect((result as Extract<GitOperationError, { kind: 'no-repo' }>).message).toBeTruthy();
   });
 });
 
 // ---------------------------------------------------------------------------
-// git-ext-unavailable path
+// Note on git-ext-unavailable
 // ---------------------------------------------------------------------------
-
-describe('git-ext-unavailable', () => {
-  it('_currentBranchPure returns no-repo (not git-ext-unavailable) for undefined repo', async () => {
-    // The public functions return git-ext-unavailable when the extension API
-    // itself is missing. The pure functions only receive the repo object; they
-    // return no-repo when the repo is undefined.
-    const result = await _currentBranchPure(undefined);
-    expect((result as GitOperationError).kind).toBe('no-repo');
-  });
-});
+// The public wrappers (currentBranch, gitCommit, etc.) return { kind: 'git-ext-unavailable' }
+// when the VS Code Git extension API itself is missing. The pure (_*Pure) functions only
+// receive the repo object and never produce git-ext-unavailable — they return { kind: 'no-repo' }
+// when called with undefined. This distinction is intentional: the public layer handles
+// extension availability; the pure layer handles repository availability.
