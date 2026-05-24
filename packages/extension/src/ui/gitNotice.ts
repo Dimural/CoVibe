@@ -25,9 +25,16 @@ import type { CommitCountdownHandle } from '../git/coordinator.js';
  */
 export function makeCommitCountdown(message: string, totalMs: number): CommitCountdownHandle {
   let resolveOuter!: (result: 'expired' | 'cancelled') => void;
-
-  const promise = new Promise<'expired' | 'cancelled'>((resolve) => {
+  const outerPromise = new Promise<'expired' | 'cancelled'>((resolve) => {
     resolveOuter = resolve;
+  });
+
+  // We need a way to signal withProgress to finish. withProgress finishes when
+  // the callback promise resolves. We create a "done" promise that we control
+  // externally so that cancel() can properly dismiss the notification.
+  let signalDone!: () => void;
+  const donePromise = new Promise<void>((resolve) => {
+    signalDone = resolve;
   });
 
   // Lazy import so the module can be loaded in tests without a host
@@ -41,36 +48,30 @@ export function makeCommitCountdown(message: string, totalMs: number): CommitCou
         cancellable: true,
       },
       async (_progress, token) => {
-        // Resolve as cancelled if the user clicks the cancel button
+        // User clicks the VS Code cancel button
         token.onCancellationRequested(() => {
           resolveOuter('cancelled');
+          signalDone();
         });
 
-        // Wait for totalMs, then resolve as expired (unless already cancelled)
-        await new Promise<void>((done) => {
-          const timer = setTimeout(() => {
-            resolveOuter('expired');
-            done();
-          }, totalMs);
-
-          // If cancelled early, stop the timer and finish the progress task
-          token.onCancellationRequested(() => {
-            clearTimeout(timer);
-            done();
-          });
-        });
+        // Wait until externally dismissed or user cancels
+        await donePromise;
       },
     );
   })();
 
+  // Start the expiry timer
+  const timer = setTimeout(() => {
+    resolveOuter('expired');
+    signalDone();
+  }, totalMs);
+
   return {
-    promise,
+    promise: outerPromise,
     cancel: () => {
-      // Dismissing is handled by resolving the outer promise, which causes the
-      // withProgress task to finish on the next tick. We resolve as 'cancelled'
-      // here so the UI closes (the GitCoordinator ignores this resolution since
-      // it aborts via the internal abort promise before awaiting the countdown).
+      clearTimeout(timer);
       resolveOuter('cancelled');
+      signalDone(); // properly dismisses the withProgress notification
     },
   };
 }

@@ -109,6 +109,7 @@ describe('GitCoordinator', () => {
       await commitPromise;
 
       expect(doCommit).not.toHaveBeenCalled();
+      expect(countdown.cancel).toHaveBeenCalledTimes(1);
     });
 
     it('shows info toast on successful commit', async () => {
@@ -159,6 +160,7 @@ describe('GitCoordinator', () => {
       await commitPromise;
 
       expect(doCommit).not.toHaveBeenCalled();
+      expect(countdown.cancel).toHaveBeenCalledTimes(1);
     });
 
     it('shows warning with peer display name when peer cancels', async () => {
@@ -241,8 +243,9 @@ describe('GitCoordinator', () => {
 
       // Peer-side user clicks Cancel
       peerCountdown.resolve('cancelled');
-      // Wait a tick for promise microtasks
-      await new Promise((r) => setTimeout(r, 0));
+      // Drain microtask queue so the promise chain resolves
+      await Promise.resolve();
+      await Promise.resolve();
 
       expect(send).toHaveBeenCalledWith('git.ack', { kind: 'commit', cancelled: true });
     });
