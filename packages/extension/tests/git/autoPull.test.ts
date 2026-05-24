@@ -12,6 +12,12 @@ import type { AutoPullOptions } from '../../src/git/autoPull.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
+type PrivateCoord = { _onRemoteChange(): Promise<void> };
+
+function callOnRemoteChange(coord: AutoPullCoordinator): Promise<void> {
+  return (coord as unknown as PrivateCoord)._onRemoteChange();
+}
+
 function makeOptions(overrides: Partial<AutoPullOptions> = {}): AutoPullOptions {
   return {
     localParticipantId: 'b-participant',
@@ -43,7 +49,7 @@ describe('AutoPullCoordinator', () => {
         getAllParticipantIds: vi.fn(() => ['a-participant', 'b-participant']),
       });
       const coord = new AutoPullCoordinator(opts);
-      await coord.testOnRemoteChange();
+      await callOnRemoteChange(coord);
 
       expect(opts.send).toHaveBeenCalledWith('git.operation', { kind: 'pull-staged' });
     });
@@ -55,7 +61,7 @@ describe('AutoPullCoordinator', () => {
         getAllParticipantIds: vi.fn(() => ['a-participant', 'b-participant']),
       });
       const coord = new AutoPullCoordinator(opts);
-      await coord.testOnRemoteChange();
+      await callOnRemoteChange(coord);
 
       expect(opts.send).not.toHaveBeenCalled();
     });
@@ -68,7 +74,7 @@ describe('AutoPullCoordinator', () => {
         getLocalHeadSha: vi.fn(() => 'same-sha'),
       });
       const coord = new AutoPullCoordinator(opts);
-      await coord.testOnRemoteChange();
+      await callOnRemoteChange(coord);
 
       expect(opts.send).not.toHaveBeenCalled();
       expect(opts.doPull).not.toHaveBeenCalled();
@@ -81,7 +87,7 @@ describe('AutoPullCoordinator', () => {
         getRemoteHeadSha: vi.fn(() => Promise.resolve<string | undefined>(undefined)),
       });
       const coord = new AutoPullCoordinator(opts);
-      await coord.testOnRemoteChange();
+      await callOnRemoteChange(coord);
 
       expect(opts.send).not.toHaveBeenCalled();
       expect(opts.doPull).not.toHaveBeenCalled();
@@ -94,7 +100,7 @@ describe('AutoPullCoordinator', () => {
         isDirty: vi.fn(() => false),
       });
       const coord = new AutoPullCoordinator(opts);
-      await coord.testOnRemoteChange();
+      await callOnRemoteChange(coord);
 
       expect(opts.doPull).toHaveBeenCalledOnce();
       expect(opts.showInfo).toHaveBeenCalledWith('Pulled latest changes.');
@@ -108,7 +114,7 @@ describe('AutoPullCoordinator', () => {
         showDirtyPullConfirm: vi.fn(() => Promise.resolve(true)),
       });
       const coord = new AutoPullCoordinator(opts);
-      await coord.testOnRemoteChange();
+      await callOnRemoteChange(coord);
 
       expect(opts.showDirtyPullConfirm).toHaveBeenCalledOnce();
       expect(opts.doPull).toHaveBeenCalledOnce();
@@ -122,10 +128,49 @@ describe('AutoPullCoordinator', () => {
         showDirtyPullConfirm: vi.fn(() => Promise.resolve(false)),
       });
       const coord = new AutoPullCoordinator(opts);
-      await coord.testOnRemoteChange();
+      await callOnRemoteChange(coord);
 
       expect(opts.showDirtyPullConfirm).toHaveBeenCalledOnce();
       expect(opts.doPull).not.toHaveBeenCalled();
+    });
+
+    it('13. concurrent onRemoteChange calls are coalesced — doPull called only once', async () => {
+      let resolvePull!: () => void;
+      const pullPromise = new Promise<void>((res) => {
+        resolvePull = res;
+      });
+
+      const opts = makeOptions({
+        localParticipantId: 'a-participant',
+        getAllParticipantIds: vi.fn(() => ['a-participant']),
+        isDirty: vi.fn(() => false),
+        doPull: vi.fn(() => pullPromise),
+      });
+      const coord = new AutoPullCoordinator(opts);
+
+      // Fire two concurrent calls — second should be dropped by the in-flight guard.
+      const first = callOnRemoteChange(coord);
+      const second = callOnRemoteChange(coord);
+
+      // Resolve the pull so both promises can settle.
+      resolvePull();
+      await Promise.all([first, second]);
+
+      expect(opts.doPull).toHaveBeenCalledOnce();
+    });
+
+    it('14. getAllParticipantIds returns empty array → triggers local pull without broadcasting', async () => {
+      const opts = makeOptions({
+        localParticipantId: 'a-participant',
+        getAllParticipantIds: vi.fn(() => []),
+        isDirty: vi.fn(() => false),
+      });
+      const coord = new AutoPullCoordinator(opts);
+      await callOnRemoteChange(coord);
+
+      expect(opts.send).not.toHaveBeenCalled();
+      expect(opts.doPull).toHaveBeenCalledOnce();
+      expect(opts.showInfo).toHaveBeenCalledWith('Pulled latest changes.');
     });
   });
 
@@ -188,7 +233,7 @@ describe('AutoPullCoordinator', () => {
         ),
       });
       const coord = new AutoPullCoordinator(opts);
-      await coord.testOnRemoteChange();
+      await callOnRemoteChange(coord);
 
       expect(opts.showWarning).toHaveBeenCalledWith(
         'Pull failed: merge conflict. Use git tools to resolve.',

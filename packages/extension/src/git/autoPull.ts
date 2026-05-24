@@ -69,6 +69,7 @@ export interface AutoPullOptions {
 export class AutoPullCoordinator {
   private readonly _opts: AutoPullOptions;
   private _disposeWatch: (() => void) | undefined;
+  private _pulling = false;
 
   constructor(opts: AutoPullOptions) {
     this._opts = opts;
@@ -104,50 +105,52 @@ export class AutoPullCoordinator {
     await this._triggerLocalPull();
   }
 
-  // ── Test escape hatch ─────────────────────────────────────────────────────
-
-  /**
-   * Exposed for unit tests only — allows tests to invoke `_onRemoteChange`
-   * without going through the `watchRemoteHead` subscription mechanism.
-   *
-   * @internal
-   */
-  async testOnRemoteChange(): Promise<void> {
-    await this._onRemoteChange();
-  }
-
   // ── Private ───────────────────────────────────────────────────────────────
 
   /** Called whenever the remote HEAD watcher fires. */
   private async _onRemoteChange(): Promise<void> {
-    const { getRemoteHeadSha, getLocalHeadSha, getAllParticipantIds, localParticipantId, send } =
-      this._opts;
+    // In-flight guard: coalesce concurrent invocations.
+    if (this._pulling) return;
+    this._pulling = true;
 
-    const remoteHead = await getRemoteHeadSha();
+    try {
+      const { getRemoteHeadSha, getLocalHeadSha, getAllParticipantIds, localParticipantId, send } =
+        this._opts;
 
-    // Can't determine remote SHA → bail out.
-    if (remoteHead === undefined) return;
+      const remoteHead = await getRemoteHeadSha();
 
-    const localHead = getLocalHeadSha();
+      // Can't determine remote SHA → bail out.
+      if (remoteHead === undefined) return;
 
-    // Already up to date → nothing to do.
-    if (remoteHead === localHead) return;
+      const localHead = getLocalHeadSha();
 
-    // Only the participant with the lowest ID broadcasts to avoid duplicates.
-    const ids = getAllParticipantIds();
-    const lowestId = [...ids].sort()[0];
-    const isLowestId = lowestId === localParticipantId;
+      // Already up to date → nothing to do.
+      if (remoteHead === localHead) return;
 
-    if (!isLowestId) {
-      // Will receive the broadcast from the lowest-ID peer.
-      return;
+      // When there are no session peers, pull locally without broadcasting.
+      const ids = getAllParticipantIds();
+      if (ids.length === 0) {
+        await this._triggerLocalPull();
+        return;
+      }
+
+      // Only the participant with the lowest ID broadcasts to avoid duplicates.
+      const lowestId = [...ids].sort()[0];
+      const isLowestId = lowestId === localParticipantId;
+
+      if (!isLowestId) {
+        // Will receive the broadcast from the lowest-ID peer.
+        return;
+      }
+
+      // Broadcast to peers so they perform their local pull.
+      send('git.operation', { kind: 'pull-staged' });
+
+      // Also pull locally.
+      await this._triggerLocalPull();
+    } finally {
+      this._pulling = false;
     }
-
-    // Broadcast to peers so they perform their local pull.
-    send('git.operation', { kind: 'pull-staged' });
-
-    // Also pull locally.
-    await this._triggerLocalPull();
   }
 
   /** Performs the actual local pull, prompting when the workspace is dirty. */
