@@ -1,5 +1,5 @@
 /**
- * Tests for GitCoordinator — coordinated commit flow.
+ * Tests for GitCoordinator — coordinated commit and push flows.
  *
  * All dependencies are injected as fakes. No VS Code extension host required.
  */
@@ -47,6 +47,10 @@ function makeOptions(overrides: Partial<GitCoordinatorOptions> = {}): GitCoordin
       cancel: vi.fn(),
     },
     getPeers: vi.fn().mockReturnValue([]),
+    hasActiveAgentIntent: vi.fn().mockReturnValue(false),
+    hasUnsyncedDocs: vi.fn().mockReturnValue(false),
+    showPushConfirm: vi.fn().mockResolvedValue(true),
+    showPeerPushRequest: vi.fn().mockResolvedValue('confirm' as const),
     ...overrides,
   };
 }
@@ -248,6 +252,237 @@ describe('GitCoordinator', () => {
       await Promise.resolve();
 
       expect(send).toHaveBeenCalledWith('git.ack', { kind: 'commit', cancelled: true });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // coordinatePush
+  // -------------------------------------------------------------------------
+
+  describe('coordinatePush', () => {
+    it('no peers → immediately calls doPush without waiting for acks', async () => {
+      const doPush = vi.fn().mockResolvedValue(undefined);
+      const send = vi.fn();
+      const options = makeOptions({
+        doPush,
+        send,
+        getPeers: vi.fn().mockReturnValue([]),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      await coordinator.coordinatePush();
+
+      expect(doPush).toHaveBeenCalledTimes(1);
+      expect(send).toHaveBeenCalledWith('git.operation', { kind: 'push' });
+    });
+
+    it('all peers ack with confirm → calls doPush', async () => {
+      const doPush = vi.fn().mockResolvedValue(undefined);
+      const send = vi.fn();
+      const options = makeOptions({
+        doPush,
+        send,
+        getPeers: vi.fn().mockReturnValue([
+          { id: 'peer-1', displayName: 'Alice' },
+          { id: 'peer-2', displayName: 'Bob' },
+        ]),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      const pushPromise = coordinator.coordinatePush();
+      coordinator.onAck({ kind: 'push', cancelled: false, participantId: 'peer-1' });
+      coordinator.onAck({ kind: 'push', cancelled: false, participantId: 'peer-2' });
+      await pushPromise;
+
+      expect(doPush).toHaveBeenCalledTimes(1);
+    });
+
+    it('any peer acks with cancel → does NOT call doPush, shows warning with peer name', async () => {
+      const doPush = vi.fn().mockResolvedValue(undefined);
+      const showWarning = vi.fn();
+      const options = makeOptions({
+        doPush,
+        showWarning,
+        getPeers: vi.fn().mockReturnValue([
+          { id: 'peer-1', displayName: 'Alice' },
+          { id: 'peer-2', displayName: 'Bob' },
+        ]),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      const pushPromise = coordinator.coordinatePush();
+      coordinator.onAck({ kind: 'push', cancelled: false, participantId: 'peer-1' });
+      coordinator.onAck({ kind: 'push', cancelled: true, participantId: 'peer-2' });
+      await pushPromise;
+
+      expect(doPush).not.toHaveBeenCalled();
+      expect(showWarning).toHaveBeenCalledWith('Push cancelled by Bob.');
+    });
+
+    it('pre-flight: hasActiveAgentIntent=true, user says no → returns without push or broadcast', async () => {
+      const doPush = vi.fn().mockResolvedValue(undefined);
+      const send = vi.fn();
+      const options = makeOptions({
+        doPush,
+        send,
+        hasActiveAgentIntent: vi.fn().mockReturnValue(true),
+        showPushConfirm: vi.fn().mockResolvedValue(false),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      await coordinator.coordinatePush();
+
+      expect(doPush).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it('pre-flight: hasActiveAgentIntent=true, user says yes → broadcasts push, proceeds', async () => {
+      const doPush = vi.fn().mockResolvedValue(undefined);
+      const send = vi.fn();
+      const options = makeOptions({
+        doPush,
+        send,
+        hasActiveAgentIntent: vi.fn().mockReturnValue(true),
+        showPushConfirm: vi.fn().mockResolvedValue(true),
+        getPeers: vi.fn().mockReturnValue([]),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      await coordinator.coordinatePush();
+
+      expect(send).toHaveBeenCalledWith('git.operation', { kind: 'push' });
+      expect(doPush).toHaveBeenCalledTimes(1);
+    });
+
+    it('pre-flight: hasUnsyncedDocs=true, user says no → returns without push', async () => {
+      const doPush = vi.fn().mockResolvedValue(undefined);
+      const send = vi.fn();
+      const options = makeOptions({
+        doPush,
+        send,
+        hasUnsyncedDocs: vi.fn().mockReturnValue(true),
+        showPushConfirm: vi.fn().mockResolvedValue(false),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      await coordinator.coordinatePush();
+
+      expect(doPush).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it('double-initiation guard → shows error', async () => {
+      const showError = vi.fn();
+      const options = makeOptions({
+        showError,
+        getPeers: vi.fn().mockReturnValue([{ id: 'peer-1', displayName: 'Alice' }]),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      // Start first push but don't resolve it yet
+      const firstPush = coordinator.coordinatePush();
+      // Attempt second push while first is in progress
+      await coordinator.coordinatePush();
+
+      expect(showError).toHaveBeenCalledWith(expect.stringContaining('already in progress'));
+
+      // Clean up first
+      coordinator.onAck({ kind: 'push', cancelled: false, participantId: 'peer-1' });
+      await firstPush;
+    });
+
+    it('shows info toast on successful push', async () => {
+      const showInfo = vi.fn();
+      const options = makeOptions({
+        showInfo,
+        getPeers: vi.fn().mockReturnValue([]),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      await coordinator.coordinatePush();
+
+      expect(showInfo).toHaveBeenCalledWith('Pushed successfully.');
+    });
+
+    it('shows error toast when doPush returns a GitOperationError', async () => {
+      const showError = vi.fn();
+      const err: GitOperationError = { kind: 'push-failed', message: 'remote rejected' };
+      const options = makeOptions({
+        showError,
+        doPush: vi.fn().mockResolvedValue(err),
+        getPeers: vi.fn().mockReturnValue([]),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      await coordinator.coordinatePush();
+
+      expect(showError).toHaveBeenCalledWith('Push failed: remote rejected');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // onPeerOperation — push handling
+  // -------------------------------------------------------------------------
+
+  describe('onPeerOperation push handling', () => {
+    it('kind=push, confirm → sends git.ack { cancelled: false }', async () => {
+      const send = vi.fn();
+      const options = makeOptions({
+        send,
+        showPeerPushRequest: vi.fn().mockResolvedValue('confirm' as const),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      coordinator.onPeerOperation({
+        kind: 'push',
+        participantId: 'peer-1',
+        displayName: 'Alice',
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(send).toHaveBeenCalledWith('git.ack', { kind: 'push', cancelled: false });
+    });
+
+    it('kind=push, cancel → sends git.ack { cancelled: true }', async () => {
+      const send = vi.fn();
+      const options = makeOptions({
+        send,
+        showPeerPushRequest: vi.fn().mockResolvedValue('cancel' as const),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      coordinator.onPeerOperation({
+        kind: 'push',
+        participantId: 'peer-1',
+        displayName: 'Alice',
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(send).toHaveBeenCalledWith('git.ack', { kind: 'push', cancelled: true });
+    });
+
+    it('kind=push, wait → sends nothing', async () => {
+      const send = vi.fn();
+      const options = makeOptions({
+        send,
+        showPeerPushRequest: vi.fn().mockResolvedValue('wait' as const),
+      });
+      const coordinator = new GitCoordinator(options);
+
+      coordinator.onPeerOperation({
+        kind: 'push',
+        participantId: 'peer-1',
+        displayName: 'Alice',
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(send).not.toHaveBeenCalled();
     });
   });
 });
