@@ -20,6 +20,26 @@ import type { RepoContext } from '../../src/git/context.js';
 import type { SessionState } from '../../src/session/state.js';
 
 // ---------------------------------------------------------------------------
+// Mock git/context so watchBranchChanges is controllable in tests
+// ---------------------------------------------------------------------------
+
+/** Captured callbacks from watchBranchChanges — each call pushes one entry. */
+const branchCallbacks: ((branch: string) => void)[] = [];
+
+vi.mock('../../src/git/context.js', () => ({
+  watchBranchChanges: vi.fn((cb: (branch: string) => void) => {
+    branchCallbacks.push(cb);
+    return Promise.resolve({ dispose: vi.fn() });
+  }),
+  getRepoContext: vi.fn().mockResolvedValue({
+    remoteUrl: 'https://github.com/example/repo.git',
+    branch: 'main',
+    isDirty: false,
+    headSha: 'abc123',
+  }),
+}));
+
+// ---------------------------------------------------------------------------
 // Mock vscode so clipboard.writeText doesn't crash in tests
 // ---------------------------------------------------------------------------
 
@@ -410,5 +430,165 @@ describe('SessionManager', () => {
     if (lastState?.kind === 'Active') {
       expect(lastState.participants).toHaveLength(2);
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // 11–15. Branch-switch handling (Task 6.5)
+  // -------------------------------------------------------------------------
+
+  describe('watchBranch / branch-switch handling', () => {
+    /** Helper: start a session and make it Active, then call watchBranch. */
+    async function startActiveWithWatch(
+      manager: SessionManager,
+    ): Promise<{ branchCb: (branch: string) => void }> {
+      await manager.start(repoCtx); // repoCtx.branch === 'main'
+      fakeClient.emit(
+        'message',
+        makeSessionStateMessage([{ id: 'p1', displayName: 'Alice', color: '#ff0000' }]),
+      );
+      const disposables: { dispose(): void }[] = [];
+      manager.watchBranch(disposables);
+      // watchBranch is async internally — drain microtasks so the callback registers
+      await new Promise((r) => setTimeout(r, 0));
+      const cb = branchCallbacks[branchCallbacks.length - 1];
+      if (cb === undefined) throw new Error('watchBranchChanges was not called');
+      return { branchCb: cb };
+    }
+
+    beforeEach(() => {
+      // Reset captured callbacks before each branch-switch sub-test
+      branchCallbacks.length = 0;
+    });
+
+    // 11. Branch switch while Active → session.leave with reason 'branch-switch'
+    it('sends session.leave with reason "branch-switch" when branch changes while Active', async () => {
+      const { manager } = makeManager(fakeClient);
+      const { branchCb } = await startActiveWithWatch(manager);
+
+      // Simulate branch change (away from 'main')
+      branchCb('feature/other');
+      await new Promise((r) => setTimeout(r, 0));
+
+      const leaveMsg = fakeClient.sentMessages.find((m) => m.type === 'session.leave');
+      expect(leaveMsg).toBeDefined();
+      expect((leaveMsg?.payload as { reason: string }).reason).toBe('branch-switch');
+    });
+
+    // 12. Branch switch while Active → manual leave() still sends 'user' reason
+    it('leave() still sends reason "user" when called directly', async () => {
+      const { manager } = makeManager(fakeClient);
+      await manager.start(repoCtx);
+      fakeClient.emit(
+        'message',
+        makeSessionStateMessage([{ id: 'p1', displayName: 'Alice', color: '#ff0000' }]),
+      );
+
+      await manager.leave();
+
+      const leaveMsg = fakeClient.sentMessages.find((m) => m.type === 'session.leave');
+      expect(leaveMsg).toBeDefined();
+      expect((leaveMsg?.payload as { reason: string }).reason).toBe('user');
+    });
+
+    // 13. Switching back to session branch → shows rejoin prompt
+    it('shows rejoin prompt when switching back to session branch', async () => {
+      const vscode = await import('vscode');
+      const showInfo = vi.mocked(vscode.window.showInformationMessage);
+      // Simulate user clicking "Yes"
+      showInfo.mockResolvedValueOnce('Yes' as unknown as undefined);
+
+      const { manager } = makeManager(fakeClient);
+      const { branchCb } = await startActiveWithWatch(manager);
+
+      // Switch away
+      branchCb('feature/other');
+      await new Promise((r) => setTimeout(r, 0));
+
+      // Switch back to 'main'
+      branchCb('main');
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(showInfo).toHaveBeenCalledWith(expect.stringContaining('Rejoin'), 'Yes', 'No');
+    });
+
+    // 14. Rejoin prompt "Yes" → calls join flow (relay client connects)
+    it('rejoins session when user clicks Yes on the rejoin prompt', async () => {
+      const vscode = await import('vscode');
+      const showInfo = vi.mocked(vscode.window.showInformationMessage);
+      showInfo.mockResolvedValueOnce(undefined); // branch-switch info message
+      showInfo.mockResolvedValueOnce('Yes' as unknown as undefined); // rejoin prompt
+
+      const { manager } = makeManager(fakeClient);
+      const { branchCb } = await startActiveWithWatch(manager);
+
+      branchCb('feature/other');
+      await new Promise((r) => setTimeout(r, 0));
+
+      // Must be Idle before rejoining
+      branchCb('main');
+      await new Promise((r) => setTimeout(r, 20));
+
+      // A new connect should have been attempted — fakeClient.connect is called again
+      // (FakeRelayClient.connect resolves immediately and sets connected = true)
+      expect(fakeClient.connected).toBe(true);
+    });
+
+    // 15. Rejoin prompt "No" → no reconnect attempted
+    it('does not rejoin when user clicks No on the rejoin prompt', async () => {
+      const vscode = await import('vscode');
+      const showInfo = vi.mocked(vscode.window.showInformationMessage);
+      showInfo.mockResolvedValueOnce(undefined); // branch-switch info
+      showInfo.mockResolvedValueOnce('No' as unknown as undefined); // rejoin → No
+
+      const { manager } = makeManager(fakeClient);
+      const { branchCb } = await startActiveWithWatch(manager);
+
+      branchCb('feature/other');
+      await new Promise((r) => setTimeout(r, 0));
+
+      fakeClient.connected = false; // reset to detect new connect
+
+      branchCb('main');
+      await new Promise((r) => setTimeout(r, 20));
+
+      // No new connection should have been made
+      expect(fakeClient.connected).toBe(false);
+    });
+
+    // 16. Rejoin offer expires after grace period → return-to-branch no longer shows prompt
+    it('does not show rejoin prompt after grace period has elapsed', async () => {
+      const vscode = await import('vscode');
+      const showInfo = vi.mocked(vscode.window.showInformationMessage);
+
+      const { manager } = makeManager(fakeClient);
+      // Start session and attach watcher BEFORE enabling fake timers so async
+      // setup (setTimeout(r, 0)) in startActiveWithWatch can resolve normally.
+      const { branchCb } = await startActiveWithWatch(manager);
+
+      // Switch to fake timers now that all async setup is complete.
+      vi.useFakeTimers();
+
+      branchCb('feature/other');
+      // Flush synchronous microtasks; fake timers don't affect Promise ticks.
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Advance past grace period (config.gracePeriodSeconds = 1800)
+      vi.advanceTimersByTime(1800 * 1000 + 100);
+
+      showInfo.mockClear();
+
+      branchCb('main');
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Should NOT show rejoin prompt
+      const rejoinCall = showInfo.mock.calls.find(
+        (args) => typeof args[0] === 'string' && args[0].includes('Rejoin'),
+      );
+      expect(rejoinCall).toBeUndefined();
+
+      vi.useRealTimers();
+    });
   });
 });

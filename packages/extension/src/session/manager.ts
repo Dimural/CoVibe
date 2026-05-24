@@ -110,6 +110,12 @@ export class SessionManager {
   private state: SessionState = IDLE_STATE;
   private client: IRelayClient | null = null;
 
+  /**
+   * Stored when a branch-switch ends a session so the user can be prompted to
+   * rejoin if they switch back within the grace period.
+   */
+  private pendingRejoin: { branch: string; inviteLink: string } | null = null;
+
   constructor(
     private readonly identity: ParticipantIdentity,
     private readonly config: CoVibesConfig,
@@ -193,8 +199,11 @@ export class SessionManager {
    * Leaves the current session gracefully.
    *
    * No-op if the session is Idle, Connecting, or Failed.
+   *
+   * @param reason - Why the session is being left. Defaults to `'user'` for
+   *   voluntary leaves. Pass `'branch-switch'` when the user switched branches.
    */
-  async leave(): Promise<void> {
+  async leave(reason: 'user' | 'branch-switch' | 'shutdown' = 'user'): Promise<void> {
     if (this.state.kind !== 'Active' && this.state.kind !== 'Reconnecting') {
       return;
     }
@@ -207,7 +216,7 @@ export class SessionManager {
     this.setState(toIdle());
 
     if (client !== null) {
-      client.send('session.leave', { reason: 'user' });
+      client.send('session.leave', { reason });
       await client.disconnect();
       this.removeListeners(client);
     }
@@ -215,7 +224,11 @@ export class SessionManager {
 
   /**
    * Starts watching for branch changes. On branch change while Active or
-   * Reconnecting, shows an informational message and ends the session.
+   * Reconnecting, shows an informational message, ends the session with reason
+   * `'branch-switch'`, and records a pending rejoin offer.
+   *
+   * If the user later switches back to the session branch within the grace
+   * period (`config.gracePeriodSeconds`), they are prompted to rejoin.
    *
    * NOTE: VS Code does not allow cancelling a git branch switch — we detect it
    * after it has already happened. We cannot prevent the switch; we can only
@@ -229,12 +242,62 @@ export class SessionManager {
       const vscode = await import('vscode');
       const { watchBranchChanges } = await import('../git/context.js');
 
-      const watcher = await watchBranchChanges(() => {
+      const watcher = await watchBranchChanges((newBranch: string) => {
         if (this.state.kind === 'Active' || this.state.kind === 'Reconnecting') {
+          // Capture session info before leaving so we can offer to rejoin later.
+          const sessionInviteLink = this.state.inviteLink;
+
+          // Recover the session's branch from the invite link.
+          let sessionBranchName: string | null = null;
+          try {
+            sessionBranchName = parseInviteLink(sessionInviteLink).branch;
+          } catch {
+            // If parsing fails, skip the rejoin offer.
+          }
+
           void vscode.window.showInformationMessage(
             'CoVibes: Branch switched — your session has ended.',
           );
-          void this.leave();
+          void this.leave('branch-switch');
+
+          // Offer rejoin only when we switched away from the session branch.
+          if (sessionBranchName !== null && sessionBranchName !== newBranch) {
+            this.pendingRejoin = { branch: sessionBranchName, inviteLink: sessionInviteLink };
+            const timer: NodeJS.Timeout = setTimeout(() => {
+              this.pendingRejoin = null;
+            }, this.config.gracePeriodSeconds * 1000);
+            // Avoid blocking Node.js exit in tests
+            timer.unref();
+          }
+        } else if (
+          this.pendingRejoin !== null &&
+          newBranch === this.pendingRejoin.branch &&
+          this.state.kind === 'Idle'
+        ) {
+          // User switched back to the session branch — offer to rejoin.
+          const { inviteLink } = this.pendingRejoin;
+          this.pendingRejoin = null;
+
+          void (async () => {
+            const answer = await vscode.window.showInformationMessage(
+              'Rejoin CoVibes session on this branch?',
+              'Yes',
+              'No',
+            );
+            if (answer === 'Yes') {
+              try {
+                const { getRepoContext } = await import('../git/context.js');
+                const ctx = await getRepoContext();
+                // getRepoContext returns RepoContext | GitContextError
+                if ('branch' in ctx) {
+                  await this.join(inviteLink, ctx);
+                }
+                // If error, silently skip — user can rejoin manually.
+              } catch {
+                // Rejoin failed silently.
+              }
+            }
+          })();
         }
       });
 
