@@ -110,6 +110,19 @@ export class SessionManager {
   private state: SessionState = IDLE_STATE;
   private client: IRelayClient | null = null;
 
+  /**
+   * Stored when a branch-switch ends a session so the user can be prompted to
+   * rejoin if they switch back within the grace period.
+   */
+  private pendingRejoin: { branch: string; inviteLink: string } | null = null;
+
+  /**
+   * Handle for the grace-period timer started after a branch-switch leave.
+   * Tracked here so stale timers can be cancelled before starting a new one,
+   * and so leave() can cancel it on a manual/voluntary leave.
+   */
+  private gracePeriodTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(
     private readonly identity: ParticipantIdentity,
     private readonly config: CoVibesConfig,
@@ -193,8 +206,19 @@ export class SessionManager {
    * Leaves the current session gracefully.
    *
    * No-op if the session is Idle, Connecting, or Failed.
+   *
+   * @param reason - Why the session is being left. Defaults to `'user'` for
+   *   voluntary leaves. Pass `'branch-switch'` when the user switched branches.
    */
-  async leave(): Promise<void> {
+  async leave(reason: 'user' | 'branch-switch' | 'shutdown' = 'user'): Promise<void> {
+    // Cancel any pending grace-period timer so a stale callback cannot clear
+    // a subsequent session's pendingRejoin data.
+    if (this.gracePeriodTimer !== null) {
+      clearTimeout(this.gracePeriodTimer);
+      this.gracePeriodTimer = null;
+      this.pendingRejoin = null;
+    }
+
     if (this.state.kind !== 'Active' && this.state.kind !== 'Reconnecting') {
       return;
     }
@@ -207,7 +231,7 @@ export class SessionManager {
     this.setState(toIdle());
 
     if (client !== null) {
-      client.send('session.leave', { reason: 'user' });
+      client.send('session.leave', { reason });
       await client.disconnect();
       this.removeListeners(client);
     }
@@ -215,7 +239,11 @@ export class SessionManager {
 
   /**
    * Starts watching for branch changes. On branch change while Active or
-   * Reconnecting, shows an informational message and ends the session.
+   * Reconnecting, shows an informational message, ends the session with reason
+   * `'branch-switch'`, and records a pending rejoin offer.
+   *
+   * If the user later switches back to the session branch within the grace
+   * period (`config.gracePeriodSeconds`), they are prompted to rejoin.
    *
    * NOTE: VS Code does not allow cancelling a git branch switch — we detect it
    * after it has already happened. We cannot prevent the switch; we can only
@@ -229,12 +257,76 @@ export class SessionManager {
       const vscode = await import('vscode');
       const { watchBranchChanges } = await import('../git/context.js');
 
-      const watcher = await watchBranchChanges(() => {
+      const watcher = await watchBranchChanges((newBranch: string) => {
+        // NOTE: Branch switches that arrive while the session is in the
+        // Connecting state are intentionally ignored here. The session has not
+        // yet received server confirmation (session.state), so there is no
+        // meaningful in-progress collaboration to protect. Once connected the
+        // normal Active/Reconnecting path below handles future switches.
         if (this.state.kind === 'Active' || this.state.kind === 'Reconnecting') {
+          // Capture session info before leaving so we can offer to rejoin later.
+          const sessionInviteLink = this.state.inviteLink;
+
+          // Recover the session's branch from the invite link.
+          let sessionBranchName: string | null = null;
+          try {
+            sessionBranchName = parseInviteLink(sessionInviteLink).branch;
+          } catch {
+            // If parsing fails, skip the rejoin offer.
+          }
+
           void vscode.window.showInformationMessage(
             'CoVibes: Branch switched — your session has ended.',
           );
-          void this.leave();
+          void this.leave('branch-switch');
+
+          // Offer rejoin only when we switched away from the session branch.
+          if (sessionBranchName !== null && sessionBranchName !== newBranch) {
+            this.pendingRejoin = { branch: sessionBranchName, inviteLink: sessionInviteLink };
+
+            // Cancel any previous grace-period timer before starting a new
+            // one. Without this, a stale timer from an earlier branch-switch
+            // could fire and null out the pendingRejoin that belongs to the
+            // most-recent switch (the "double-switch" timer-leak bug).
+            if (this.gracePeriodTimer !== null) {
+              clearTimeout(this.gracePeriodTimer);
+            }
+            this.gracePeriodTimer = setTimeout(() => {
+              this.gracePeriodTimer = null;
+              this.pendingRejoin = null;
+            }, this.config.gracePeriodSeconds * 1000);
+            // Avoid blocking Node.js exit in tests
+            this.gracePeriodTimer.unref();
+          }
+        } else if (
+          this.pendingRejoin !== null &&
+          newBranch === this.pendingRejoin.branch &&
+          this.state.kind === 'Idle'
+        ) {
+          // User switched back to the session branch — offer to rejoin.
+          const { inviteLink } = this.pendingRejoin;
+          this.pendingRejoin = null;
+
+          void (async () => {
+            const answer = await vscode.window.showInformationMessage(
+              'Rejoin CoVibes session on this branch?',
+              'Yes',
+              'No',
+            );
+            if (answer === 'Yes') {
+              try {
+                const { getRepoContext } = await import('../git/context.js');
+                const ctx = await getRepoContext();
+                // getRepoContext returns RepoContext | GitContextError
+                if ('branch' in ctx) {
+                  await this.join(inviteLink, ctx);
+                }
+                // If error, silently skip — user can rejoin manually.
+              } catch {
+                // Rejoin failed silently.
+              }
+            }
+          })();
         }
       });
 
