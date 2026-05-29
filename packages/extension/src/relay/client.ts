@@ -14,6 +14,7 @@ import {
   type MessagePayload,
 } from '@covibes/protocol';
 import { computeNextDelay, DEFAULT_RECONNECT_OPTIONS, type ReconnectOptions } from './reconnect.js';
+import { RelayUnreachableError } from '../errors.js';
 
 // PayloadOf<T> is an alias for MessagePayload<T> for the public API
 export type PayloadOf<T extends MessageType> = MessagePayload<T>;
@@ -277,8 +278,8 @@ export class RelayClient {
 
       const onError = (err: Error): void => {
         if (!this._connected) {
-          // Connection-phase error — reject the connect() promise
-          reject(err);
+          // Connection-phase error — reject the connect() promise with a typed error
+          reject(new RelayUnreachableError(this.opts.relayUrl));
         } else {
           this.emit('error', err);
         }

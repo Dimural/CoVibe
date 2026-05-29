@@ -13,13 +13,15 @@ import {
   deriveSessionId,
   formatInviteLink,
   parseInviteLink,
-  InviteError,
 } from '@covibes/protocol';
 
 import type { RelayClientOptions } from '../relay/client.js';
 import type { ParticipantIdentity } from '../identity.js';
 import type { CoVibesConfig } from '../config.js';
 import type { RepoContext } from '../git/context.js';
+
+import { BranchMismatchError, InvalidInviteLinkError } from '../errors.js';
+export { BranchMismatchError } from '../errors.js';
 
 import {
   IDLE_STATE,
@@ -44,22 +46,6 @@ export interface IRelayClient {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   send(type: string, payload: unknown): void;
-}
-
-// ---------------------------------------------------------------------------
-// Typed error for branch mismatches
-// ---------------------------------------------------------------------------
-
-/**
- * Thrown by `join()` when the invite link targets a branch different from the
- * one currently checked out. The caller should prompt the user to switch
- * branches and retry.
- */
-export class BranchMismatchError extends Error {
-  constructor(public readonly requiredBranch: string) {
-    super(`Switch to branch '${requiredBranch}' to join this session`);
-    this.name = 'BranchMismatchError';
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -183,11 +169,8 @@ export class SessionManager {
     let parsed: { sessionId: string; token: string; branch: string };
     try {
       parsed = parseInviteLink(inviteLink);
-    } catch (err) {
-      if (err instanceof InviteError) {
-        throw new Error(`Invalid invite link: ${err.message}`);
-      }
-      throw new Error('Invalid invite link');
+    } catch {
+      throw new InvalidInviteLinkError(inviteLink);
     }
 
     if (parsed.branch !== repoContext.branch) {
