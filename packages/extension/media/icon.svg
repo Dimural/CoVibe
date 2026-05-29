@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Background -->
+  <rect width="128" height="128" rx="20" fill="#1a1a2e"/>
+  <!-- Two overlapping cursor shapes representing collaboration -->
+  <polygon points="28,24 28,80 44,64 52,88 62,84 54,60 72,60" fill="#7c3aed"/>
+  <polygon points="56,44 56,100 72,84 80,108 90,104 82,80 100,80" fill="#06b6d4" opacity="0.85"/>
+  <!-- CoVibes wave lines at bottom -->
+  <path d="M16 104 Q32 96 48 104 Q64 112 80 104 Q96 96 112 104" stroke="#7c3aed" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M16 114 Q32 106 48 114 Q64 122 80 114 Q96 106 112 114" stroke="#06b6d4" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6"/>
+</svg>

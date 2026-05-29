@@ -1,76 +1,59 @@
 # @covibes/relay
 
-WebSocket relay server for CoVibes. Routes real-time collaboration messages between VS Code extension clients. No content is stored — it is a stateless message bus.
+The CoVibes relay server — a stateless WebSocket message router with OT sequencing and Redis-backed session persistence.
 
----
+## Architecture
 
-## Run locally
+- **Stateless per-message:** no file content is stored; messages are forwarded in real time
+- **OT Sequencer:** per-document version counter assigns a monotonic `serverVersion` to each `doc.delta`; transforms concurrent ops to ensure convergence
+- **Session Registry:** in-memory participant list + grace timer, backed by Redis for reconnection across relay restarts
+- **Observability:** structured JSON logging (pino), Prometheus metrics at `/metrics`, optional Sentry error tracking
+
+## Running Locally
 
 ```bash
-# Install deps from repo root
+# Install dependencies (from repo root)
 pnpm install
 
-# Required env vars (all optional during scaffold phase)
-export PORT=8080
-export REDIS_URL=redis://localhost:6379   # optional; required from Task 2.3 onward
-export LOG_LEVEL=info                     # fatal|error|warn|info|debug|trace
-export MAX_PARTICIPANTS=4                 # 2–16
-export SESSION_GRACE_MS=1800000          # ms before an idle session is evicted
+# Start with hot reload
+PORT=3000 pnpm --filter @covibes/relay dev
 
-# Development (hot-reload)
-pnpm --filter @covibes/relay dev
-
-# Production build
+# Or build and run
 pnpm --filter @covibes/relay build
-pnpm --filter @covibes/relay start
+node packages/relay/dist/main.js
 ```
 
----
+## Environment Variables
 
-## Endpoints
+| Variable           | Required | Default      | Description                                                |
+| ------------------ | -------- | ------------ | ---------------------------------------------------------- |
+| `PORT`             | No       | `3000`       | HTTP/WS listen port                                        |
+| `REDIS_URL`        | No       | —            | Redis connection URL; omit for in-memory only              |
+| `LOG_LEVEL`        | No       | `info`       | pino log level (`debug`, `info`, `warn`, `error`, `fatal`) |
+| `MAX_PARTICIPANTS` | No       | `4`          | Maximum participants per session                           |
+| `SESSION_GRACE_MS` | No       | `1800000`    | Grace period before session expires (ms)                   |
+| `SENTRY_DSN`       | No       | —            | Sentry DSN for error tracking                              |
+| `NODE_ENV`         | No       | `production` | Environment tag                                            |
 
-| Path       | Method        | Description                                        |
-| ---------- | ------------- | -------------------------------------------------- |
-| `/healthz` | GET           | Liveness probe — always 200 once the process is up |
-| `/readyz`  | GET           | Readiness probe — 503 if Redis is unreachable      |
-| `/ws`      | GET (upgrade) | WebSocket endpoint                                 |
+## Deploying to Fly.io
 
----
-
-## Deploy
-
-The relay is deployed to Fly.io. Configuration lives in `packages/relay/fly.toml`.
-
-### First-time setup
-
-1. Install `flyctl` locally: `brew install flyctl`.
-2. `flyctl auth login`.
-3. `flyctl launch --no-deploy --copy-config --name covibes-relay --region ord` (skip if the app already exists).
-4. Attach Upstash Redis: `flyctl redis create --name covibes-relay-redis` (or via the Fly dashboard). Copy the resulting `REDIS_URL`.
-5. Set secrets:
-   ```
-   flyctl secrets set REDIS_URL='redis://...' --app covibes-relay
-   flyctl secrets set SENTRY_DSN='...' --app covibes-relay   # optional
-   ```
-
-> `REDIS_URL` and `SENTRY_DSN` are intentionally absent from `fly.toml` — they must be set as Fly secrets, not committed to source control.
-
-### Continuous deployment
-
-Pushes to `main` trigger the `deploy` job in `.github/workflows/ci.yml`. The job runs only after the full `ci` job (lint, typecheck, test, build) passes and is gated by the GitHub Actions `production` environment.
-
-To enforce manual approval before each deploy, go to **repo Settings → Environments → production → Required reviewers** and add the appropriate approvers.
-
-Required GitHub secret: `FLY_API_TOKEN` — generate via `flyctl auth token` and store it under **repo Settings → Secrets and variables → Actions**.
-
-### Manual deploy
-
-```
-flyctl deploy --config packages/relay/fly.toml
+```bash
+fly auth login
+fly apps create covibes-relay
+fly secrets set REDIS_URL=rediss://...
+fly deploy
 ```
 
-### Monitoring
+See `fly.toml` for scaling and region configuration.
 
-- Logs: `flyctl logs --app covibes-relay`
-- Health: GET `/healthz` (liveness), `/readyz` (readiness — checks Redis connection)
-- Metrics: GET `/metrics` exposes Prometheus-format metrics
+## Health Checks
+
+- `GET /healthz` — returns `{"status":"ok"}` when server is running
+- `GET /readyz` — additionally checks Redis connectivity
+- `GET /metrics` — Prometheus metrics
+
+## Scaling
+
+The relay is stateless per-message. For multiple instances, add a Redis pub/sub layer for cross-instance routing. For most workloads, a single Fly.io instance handles 100+ concurrent sessions.
+
+See `RUNBOOK.md` for on-call procedures.

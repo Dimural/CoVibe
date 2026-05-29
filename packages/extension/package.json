@@ -1,15 +1,38 @@
 {
-  "name": "@covibes/extension",
+  "name": "covibes",
   "displayName": "CoVibes",
-  "description": "Real-time collaborative AI-assisted coding sessions",
+  "description": "Real-time collaborative AI-assisted coding sessions — Google Docs for vibe coding",
   "version": "0.0.1",
   "publisher": "covibes",
-  "private": true,
+  "icon": "media/icon.png",
+  "homepage": "https://github.com/covibes/covibes",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/covibes/covibes.git"
+  },
+  "bugs": {
+    "url": "https://github.com/covibes/covibes/issues"
+  },
+  "license": "MIT",
+  "keywords": [
+    "collaboration",
+    "pair programming",
+    "AI",
+    "agent",
+    "real-time",
+    "sync",
+    "vibe coding",
+    "copilot",
+    "cursor",
+    "cline"
+  ],
   "engines": {
     "vscode": "^1.95.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "SCM Providers",
+    "Programming Languages"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -87,6 +110,11 @@
           "type": "number",
           "default": 1800,
           "description": "Seconds to keep a session open after the last participant disconnects"
+        },
+        "covibes.telemetry.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Send anonymous usage statistics to help improve CoVibes. No code, file paths, or personal data is ever collected. See PRIVACY.md for details."
         }
       }
     },
@@ -121,6 +149,7 @@
   },
   "dependencies": {
     "@covibes/protocol": "workspace:*",
+    "@sentry/node": "^8.0.0",
     "diff-match-patch": "^1.0.5",
     "ws": "^8.18.0"
   }

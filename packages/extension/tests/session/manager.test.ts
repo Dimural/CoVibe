@@ -252,7 +252,9 @@ describe('SessionManager', () => {
   it('join() with invalid link throws', async () => {
     const { manager } = makeManager(fakeClient);
 
-    await expect(manager.join('not-a-valid-link', repoCtx)).rejects.toThrow('Invalid invite link');
+    await expect(manager.join('not-a-valid-link', repoCtx)).rejects.toThrow(
+      'Invalid CoVibes invite link',
+    );
   });
 
   // -------------------------------------------------------------------------

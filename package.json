@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm -r test",
+    "test": "pnpm -r --filter '!@covibes/e2e' test",
     "lint": "eslint . --no-error-on-unmatched-pattern && pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write ."

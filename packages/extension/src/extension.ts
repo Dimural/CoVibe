@@ -3,7 +3,9 @@ import { CoVibesStatusBar } from './ui/statusBar.js';
 import { SessionPanel } from './ui/sessionPanel.js';
 import { getOrCreateIdentity } from './identity.js';
 import { getConfig } from './config.js';
-import { SessionManager, BranchMismatchError } from './session/manager.js';
+import { SessionManager } from './session/manager.js';
+import { userMessage, BranchMismatchError } from './errors.js';
+import { createTelemetry, noopTelemetry, type Telemetry } from './telemetry.js';
 import { RelayClient } from './relay/client.js';
 import { getRepoContext } from './git/context.js';
 import type { SessionState } from './session/state.js';
@@ -29,6 +31,8 @@ export function activate(context: vscode.ExtensionContext): void {
     sessionPanel.update(state);
   }
 
+  let telemetry: Telemetry = noopTelemetry;
+
   // Bootstrap identity + config + manager asynchronously.
   // Commands are registered synchronously but delegate to the initialized
   // manager, which will be available by the time the user first invokes them.
@@ -48,6 +52,14 @@ export function activate(context: vscode.ExtensionContext): void {
     }
 
     const config = getConfig();
+
+    telemetry = createTelemetry({
+      enabled:
+        vscode.workspace.getConfiguration('covibes').get<boolean>('telemetry.enabled') ?? false,
+      vscodeTelemetryEnabled: vscode.env.isTelemetryEnabled,
+      sentryDsn: process.env['COVIBES_SENTRY_DSN'],
+    });
+    context.subscriptions.push({ dispose: () => telemetry.dispose() });
 
     const manager = new SessionManager(
       identity,
@@ -240,14 +252,12 @@ export function activate(context: vscode.ExtensionContext): void {
               await manager.start(repoCtx);
             },
           );
+          telemetry.track('session_start', {});
           void vscode.window.showInformationMessage(
             'CoVibes: Session started! Invite link copied to clipboard.',
           );
         } catch (err) {
-          void vscode.window.showErrorMessage(
-            'CoVibes: Failed to start session — ' +
-              (err instanceof Error ? err.message : String(err)),
-          );
+          void vscode.window.showErrorMessage(userMessage(err));
         }
       })();
     }),
@@ -286,16 +296,10 @@ export function activate(context: vscode.ExtensionContext): void {
           void vscode.window.showInformationMessage('CoVibes: Joined session.');
         } catch (err) {
           if (err instanceof BranchMismatchError) {
-            void vscode.window.showWarningMessage(
-              `CoVibes: Switch to branch ${err.requiredBranch} to join this session.`,
-              'OK',
-            );
+            void vscode.window.showWarningMessage(userMessage(err));
             return;
           }
-          void vscode.window.showErrorMessage(
-            'CoVibes: Failed to join session — ' +
-              (err instanceof Error ? err.message : String(err)),
-          );
+          void vscode.window.showErrorMessage(userMessage(err));
         }
       })();
     }),
