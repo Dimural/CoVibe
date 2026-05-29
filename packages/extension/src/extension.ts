@@ -250,9 +250,9 @@ export function activate(context: vscode.ExtensionContext): void {
             { location: vscode.ProgressLocation.Notification, title: 'CoVibes: Connecting...' },
             async () => {
               await manager.start(repoCtx);
-              telemetry.track('session_start', {});
             },
           );
+          telemetry.track('session_start', {});
           void vscode.window.showInformationMessage(
             'CoVibes: Session started! Invite link copied to clipboard.',
           );

@@ -27,6 +27,8 @@ const SYNC_LATENCY_THRESHOLD_MS = 300;
 export function createTelemetry(opts: TelemetryOptions): Telemetry {
   const active = opts.enabled && opts.vscodeTelemetryEnabled && opts.sentryDsn !== undefined;
 
+  let _sentryInitialized = false;
+
   const internalTrack =
     opts._trackFn ??
     ((event: string, data: Record<string, unknown>) => {
@@ -38,6 +40,11 @@ export function createTelemetry(opts: TelemetryOptions): Telemetry {
       void (async () => {
         try {
           const Sentry = (await import(/* @vite-ignore */ sentryModule)) as {
+            init: (opts: {
+              dsn: string | undefined;
+              environment: string;
+              tracesSampleRate: number;
+            }) => void;
             addBreadcrumb: (opts: {
               category: string;
               message: string;
@@ -50,6 +57,14 @@ export function createTelemetry(opts: TelemetryOptions): Telemetry {
               tags: Record<string, string>;
             }) => void;
           };
+          if (!_sentryInitialized) {
+            Sentry.init({
+              dsn: opts.sentryDsn,
+              environment: 'extension',
+              tracesSampleRate: 0,
+            });
+            _sentryInitialized = true;
+          }
           Sentry.addBreadcrumb({ category: 'telemetry', message: event, data });
           Sentry.captureEvent({
             message: `telemetry.${event}`,
