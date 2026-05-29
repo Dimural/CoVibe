@@ -5,7 +5,7 @@
   "description": "End-to-end tests for the CoVibes VS Code extension",
   "scripts": {
     "pretest": "pnpm --filter @covibes/extension run build",
-    "test": "node -r ts-node/register src/runTests.ts",
+    "test": "tsc --outDir out && node out/runTests.js",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
