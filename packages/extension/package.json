@@ -87,6 +87,11 @@
           "type": "number",
           "default": 1800,
           "description": "Seconds to keep a session open after the last participant disconnects"
+        },
+        "covibes.telemetry.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Send anonymous usage statistics to help improve CoVibes. No code, file paths, or personal data is ever collected. See PRIVACY.md for details."
         }
       }
     },

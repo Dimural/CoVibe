@@ -5,6 +5,7 @@ import { getOrCreateIdentity } from './identity.js';
 import { getConfig } from './config.js';
 import { SessionManager } from './session/manager.js';
 import { userMessage, BranchMismatchError } from './errors.js';
+import { createTelemetry, noopTelemetry, type Telemetry } from './telemetry.js';
 import { RelayClient } from './relay/client.js';
 import { getRepoContext } from './git/context.js';
 import type { SessionState } from './session/state.js';
@@ -30,6 +31,8 @@ export function activate(context: vscode.ExtensionContext): void {
     sessionPanel.update(state);
   }
 
+  let telemetry: Telemetry = noopTelemetry;
+
   // Bootstrap identity + config + manager asynchronously.
   // Commands are registered synchronously but delegate to the initialized
   // manager, which will be available by the time the user first invokes them.
@@ -49,6 +52,14 @@ export function activate(context: vscode.ExtensionContext): void {
     }
 
     const config = getConfig();
+
+    telemetry = createTelemetry({
+      enabled:
+        vscode.workspace.getConfiguration('covibes').get<boolean>('telemetry.enabled') ?? false,
+      vscodeTelemetryEnabled: vscode.env.isTelemetryEnabled,
+      sentryDsn: process.env['COVIBES_SENTRY_DSN'],
+    });
+    context.subscriptions.push({ dispose: () => telemetry.dispose() });
 
     const manager = new SessionManager(
       identity,
@@ -239,6 +250,7 @@ export function activate(context: vscode.ExtensionContext): void {
             { location: vscode.ProgressLocation.Notification, title: 'CoVibes: Connecting...' },
             async () => {
               await manager.start(repoCtx);
+              telemetry.track('session_start', {});
             },
           );
           void vscode.window.showInformationMessage(
