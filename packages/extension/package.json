@@ -1,15 +1,39 @@
 {
-  "name": "@covibes/extension",
+  "name": "covibes",
   "displayName": "CoVibes",
-  "description": "Real-time collaborative AI-assisted coding sessions",
+  "description": "Real-time collaborative AI-assisted coding sessions — Google Docs for vibe coding",
   "version": "0.0.1",
   "publisher": "covibes",
+  "icon": "media/icon.png",
+  "homepage": "https://github.com/covibes/covibes",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/covibes/covibes.git"
+  },
+  "bugs": {
+    "url": "https://github.com/covibes/covibes/issues"
+  },
+  "license": "MIT",
+  "keywords": [
+    "collaboration",
+    "pair programming",
+    "AI",
+    "agent",
+    "real-time",
+    "sync",
+    "vibe coding",
+    "copilot",
+    "cursor",
+    "cline"
+  ],
   "private": true,
   "engines": {
     "vscode": "^1.95.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "SCM Providers",
+    "Programming Languages"
   ],
   "activationEvents": [
     "onStartupFinished"
