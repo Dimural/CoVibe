@@ -9,7 +9,12 @@ async function main(): Promise<void> {
   const extensionTestsPath = path.resolve(__dirname, './suite/index');
 
   try {
-    await runTests({ extensionDevelopmentPath, extensionTestsPath });
+    await runTests({
+      extensionDevelopmentPath,
+      extensionTestsPath,
+      // Required for headless CI environments (no X server)
+      launchArgs: ['--headless', '--disable-gpu', '--no-sandbox'],
+    });
   } catch (err) {
     process.stderr.write(`E2E tests failed: ${String(err)}\n`);
     process.exit(1);
