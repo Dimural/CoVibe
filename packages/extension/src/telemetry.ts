@@ -1,6 +1,7 @@
+import type * as SentryType from '@sentry/node';
+
 export interface TelemetryEvent {
   session_start: { participantCount?: number };
-  session_end: { durationMs: number; conflictCount: number };
   sync_latency_high: { latencyMs: number };
   error: { code: string };
 }
@@ -32,50 +33,27 @@ export function createTelemetry(opts: TelemetryOptions): Telemetry {
   const internalTrack =
     opts._trackFn ??
     ((event: string, data: Record<string, unknown>) => {
-      // Lazy Sentry import mirrors the relay's sentry.ts pattern so that a
-      // missing @sentry/node package does not crash the extension host.
-      // We use a dynamic string to avoid a static import that would require
-      // @sentry/node to be present at typecheck time.
-      const sentryModule = '@sentry/node';
-      void (async () => {
-        try {
-          const Sentry = (await import(/* @vite-ignore */ sentryModule)) as {
-            init: (opts: {
-              dsn: string | undefined;
-              environment: string;
-              tracesSampleRate: number;
-            }) => void;
-            addBreadcrumb: (opts: {
-              category: string;
-              message: string;
-              data: Record<string, unknown>;
-            }) => void;
-            captureEvent: (opts: {
-              message: string;
-              level: string;
-              extra: Record<string, unknown>;
-              tags: Record<string, string>;
-            }) => void;
-          };
-          if (!_sentryInitialized) {
-            Sentry.init({
-              dsn: opts.sentryDsn,
-              environment: 'extension',
-              tracesSampleRate: 0,
-            });
-            _sentryInitialized = true;
-          }
-          Sentry.addBreadcrumb({ category: 'telemetry', message: event, data });
-          Sentry.captureEvent({
-            message: `telemetry.${event}`,
-            level: 'info',
-            extra: data,
-            tags: { telemetry: 'true' },
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const Sentry = require('@sentry/node') as typeof SentryType;
+        if (!_sentryInitialized) {
+          Sentry.init({
+            ...(opts.sentryDsn !== undefined ? { dsn: opts.sentryDsn } : {}),
+            environment: 'extension',
+            tracesSampleRate: 0,
           });
-        } catch {
-          // Sentry unavailable; silently swallow
+          _sentryInitialized = true;
         }
-      })();
+        Sentry.addBreadcrumb({ category: 'telemetry', message: event, data });
+        Sentry.captureEvent({
+          message: `telemetry.${event}`,
+          level: 'info',
+          extra: data,
+          tags: { telemetry: 'true' },
+        });
+      } catch {
+        // Sentry unavailable — no-op
+      }
     });
 
   function track<K extends TelemetryEventName>(event: K, data: TelemetryEvent[K]): void {

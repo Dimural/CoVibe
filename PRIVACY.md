@@ -6,12 +6,11 @@ CoVibes collects **anonymous, aggregated usage statistics** to help improve the 
 
 When telemetry is enabled, CoVibes may collect:
 
-| Event | Data |
-|---|---|
-| `session_start` | Number of participants (integer) |
-| `session_end` | Session duration in milliseconds; number of conflicts encountered |
-| `sync_latency_high` | Sync latency in milliseconds when above 300ms threshold |
-| `error` | Error code string (e.g. `RelayUnreachable`) |
+| Event               | Data                                                              |
+| ------------------- | ----------------------------------------------------------------- |
+| `session_start`     | Number of participants (integer)                                  |
+| `sync_latency_high` | Sync latency in milliseconds when above 300ms threshold           |
+| `error`             | Error code string (e.g. `RelayUnreachable`)                       |
 
 ## What CoVibes never collects
 

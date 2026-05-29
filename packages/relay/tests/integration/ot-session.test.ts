@@ -93,8 +93,12 @@ describe('Scenario 7 — OT sequencing: concurrent doc.delta', () => {
       // Both should receive a doc.ack for their own op
       const ackA = await A.recv((m: AnyDecodedMessage) => m.type === 'doc.ack', 1000);
       const ackB = await B.recv((m: AnyDecodedMessage) => m.type === 'doc.ack', 1000);
-      expect((ackA.payload as { serverVersion: number }).serverVersion).toBeGreaterThanOrEqual(1);
-      expect((ackB.payload as { serverVersion: number }).serverVersion).toBeGreaterThanOrEqual(1);
+      const svA = (ackA.payload as { serverVersion: number }).serverVersion;
+      const svB = (ackB.payload as { serverVersion: number }).serverVersion;
+      expect(svA).toBeGreaterThanOrEqual(1);
+      expect(svB).toBeGreaterThanOrEqual(1);
+      // The sequencer must assign different versions to the two concurrent ops
+      expect(svA).not.toBe(svB);
 
       // Each client receives the other's transformed op
       await A.recv((m: AnyDecodedMessage) => m.type === 'doc.delta', 1000);

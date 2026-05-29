@@ -59,6 +59,9 @@ importers:
       '@covibes/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@sentry/node':
+        specifier: ^8.0.0
+        version: 8.55.2
       diff-match-patch:
         specifier: ^1.0.5
         version: 1.0.5
@@ -2737,30 +2740,25 @@ snapshots:
   '@opentelemetry/api-logs@0.53.0':
     dependencies:
       '@opentelemetry/api': 1.9.1
-    optional: true
 
   '@opentelemetry/api-logs@0.57.1':
     dependencies:
       '@opentelemetry/api': 1.9.1
-    optional: true
 
   '@opentelemetry/api-logs@0.57.2':
     dependencies:
       '@opentelemetry/api': 1.9.1
-    optional: true
 
   '@opentelemetry/api@1.9.1': {}
 
   '@opentelemetry/context-async-hooks@1.30.1(@opentelemetry/api@1.9.1)':
     dependencies:
       '@opentelemetry/api': 1.9.1
-    optional: true
 
   '@opentelemetry/core@1.30.1(@opentelemetry/api@1.9.1)':
     dependencies:
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/semantic-conventions': 1.28.0
-    optional: true
 
   '@opentelemetry/instrumentation-amqplib@0.46.1(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2770,7 +2768,6 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-connect@0.43.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2781,7 +2778,6 @@ snapshots:
       '@types/connect': 3.4.36
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-dataloader@0.16.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2789,7 +2785,6 @@ snapshots:
       '@opentelemetry/instrumentation': 0.57.2(@opentelemetry/api@1.9.1)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-express@0.47.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2799,7 +2794,6 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-fastify@0.44.1(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2809,7 +2803,6 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-fs@0.19.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2818,7 +2811,6 @@ snapshots:
       '@opentelemetry/instrumentation': 0.57.2(@opentelemetry/api@1.9.1)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-generic-pool@0.43.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2826,7 +2818,6 @@ snapshots:
       '@opentelemetry/instrumentation': 0.57.2(@opentelemetry/api@1.9.1)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-graphql@0.47.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2834,7 +2825,6 @@ snapshots:
       '@opentelemetry/instrumentation': 0.57.2(@opentelemetry/api@1.9.1)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-hapi@0.45.1(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2844,7 +2834,6 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-http@0.57.1(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2856,7 +2845,6 @@ snapshots:
       semver: 7.7.4
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-ioredis@0.47.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2866,7 +2854,6 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-kafkajs@0.7.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2875,7 +2862,6 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-knex@0.44.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2884,7 +2870,6 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-koa@0.47.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2894,7 +2879,6 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-lru-memoizer@0.44.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2902,7 +2886,6 @@ snapshots:
       '@opentelemetry/instrumentation': 0.57.2(@opentelemetry/api@1.9.1)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-mongodb@0.51.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2911,7 +2894,6 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-mongoose@0.46.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2921,7 +2903,6 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-mysql2@0.45.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2931,7 +2912,6 @@ snapshots:
       '@opentelemetry/sql-common': 0.40.1(@opentelemetry/api@1.9.1)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-mysql@0.45.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2941,7 +2921,6 @@ snapshots:
       '@types/mysql': 2.15.26
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-nestjs-core@0.44.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2950,7 +2929,6 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-pg@0.50.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2963,7 +2941,6 @@ snapshots:
       '@types/pg-pool': 2.0.6
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-redis-4@0.46.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2973,7 +2950,6 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-tedious@0.18.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2983,7 +2959,6 @@ snapshots:
       '@types/tedious': 4.0.14
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation-undici@0.10.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -2992,7 +2967,6 @@ snapshots:
       '@opentelemetry/instrumentation': 0.57.2(@opentelemetry/api@1.9.1)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation@0.53.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -3005,7 +2979,6 @@ snapshots:
       shimmer: 1.2.1
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation@0.57.1(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -3018,7 +2991,6 @@ snapshots:
       shimmer: 1.2.1
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@opentelemetry/instrumentation@0.57.2(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -3031,17 +3003,14 @@ snapshots:
       shimmer: 1.2.1
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
-  '@opentelemetry/redis-common@0.36.2':
-    optional: true
+  '@opentelemetry/redis-common@0.36.2': {}
 
   '@opentelemetry/resources@1.30.1(@opentelemetry/api@1.9.1)':
     dependencies:
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/core': 1.30.1(@opentelemetry/api@1.9.1)
       '@opentelemetry/semantic-conventions': 1.28.0
-    optional: true
 
   '@opentelemetry/sdk-trace-base@1.30.1(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -3049,22 +3018,17 @@ snapshots:
       '@opentelemetry/core': 1.30.1(@opentelemetry/api@1.9.1)
       '@opentelemetry/resources': 1.30.1(@opentelemetry/api@1.9.1)
       '@opentelemetry/semantic-conventions': 1.28.0
-    optional: true
 
-  '@opentelemetry/semantic-conventions@1.27.0':
-    optional: true
+  '@opentelemetry/semantic-conventions@1.27.0': {}
 
-  '@opentelemetry/semantic-conventions@1.28.0':
-    optional: true
+  '@opentelemetry/semantic-conventions@1.28.0': {}
 
-  '@opentelemetry/semantic-conventions@1.40.0':
-    optional: true
+  '@opentelemetry/semantic-conventions@1.40.0': {}
 
   '@opentelemetry/sql-common@0.40.1(@opentelemetry/api@1.9.1)':
     dependencies:
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/core': 1.30.1(@opentelemetry/api@1.9.1)
-    optional: true
 
   '@pinojs/redact@0.4.0': {}
 
@@ -3078,7 +3042,6 @@ snapshots:
       '@opentelemetry/sdk-trace-base': 1.30.1(@opentelemetry/api@1.9.1)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@rollup/rollup-android-arm-eabi@4.60.2':
     optional: true
@@ -3155,8 +3118,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.60.2':
     optional: true
 
-  '@sentry/core@8.55.2':
-    optional: true
+  '@sentry/core@8.55.2': {}
 
   '@sentry/node@8.55.2':
     dependencies:
@@ -3197,7 +3159,6 @@ snapshots:
       import-in-the-middle: 1.15.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@sentry/opentelemetry@8.55.2(@opentelemetry/api@1.9.1)(@opentelemetry/context-async-hooks@1.30.1(@opentelemetry/api@1.9.1))(@opentelemetry/core@1.30.1(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.57.2(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@1.30.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.40.0)':
     dependencies:
@@ -3208,7 +3169,6 @@ snapshots:
       '@opentelemetry/sdk-trace-base': 1.30.1(@opentelemetry/api@1.9.1)
       '@opentelemetry/semantic-conventions': 1.40.0
       '@sentry/core': 8.55.2
-    optional: true
 
   '@simple-git/args-pathspec@1.0.3': {}
 
@@ -3227,7 +3187,6 @@ snapshots:
   '@types/connect@3.4.36':
     dependencies:
       '@types/node': 20.19.39
-    optional: true
 
   '@types/diff-match-patch@1.0.36': {}
 
@@ -3240,7 +3199,6 @@ snapshots:
   '@types/mysql@2.15.26':
     dependencies:
       '@types/node': 20.19.39
-    optional: true
 
   '@types/node@20.19.39':
     dependencies:
@@ -3249,22 +3207,18 @@ snapshots:
   '@types/pg-pool@2.0.6':
     dependencies:
       '@types/pg': 8.6.1
-    optional: true
 
   '@types/pg@8.6.1':
     dependencies:
       '@types/node': 20.19.39
       pg-protocol: 1.13.0
       pg-types: 2.2.0
-    optional: true
 
-  '@types/shimmer@1.2.0':
-    optional: true
+  '@types/shimmer@1.2.0': {}
 
   '@types/tedious@4.0.14':
     dependencies:
       '@types/node': 20.19.39
-    optional: true
 
   '@types/vscode@1.118.0': {}
 
@@ -3416,7 +3370,6 @@ snapshots:
   acorn-import-attributes@1.9.5(acorn@8.16.0):
     dependencies:
       acorn: 8.16.0
-    optional: true
 
   acorn-jsx@5.3.2(acorn@8.16.0):
     dependencies:
@@ -3524,8 +3477,7 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  cjs-module-lexer@1.4.3:
-    optional: true
+  cjs-module-lexer@1.4.3: {}
 
   cli-cursor@5.0.0:
     dependencies:
@@ -3587,8 +3539,7 @@ snapshots:
 
   emoji-regex@9.2.2: {}
 
-  es-errors@1.3.0:
-    optional: true
+  es-errors@1.3.0: {}
 
   es-module-lexer@1.7.0: {}
 
@@ -3794,16 +3745,14 @@ snapshots:
       cross-spawn: 7.0.6
       signal-exit: 4.1.0
 
-  forwarded-parse@2.1.2:
-    optional: true
+  forwarded-parse@2.1.2: {}
 
   fs.realpath@1.0.0: {}
 
   fsevents@2.3.3:
     optional: true
 
-  function-bind@1.1.2:
-    optional: true
+  function-bind@1.1.2: {}
 
   get-caller-file@2.0.5: {}
 
@@ -3851,7 +3800,6 @@ snapshots:
   hasown@2.0.3:
     dependencies:
       function-bind: 1.1.2
-    optional: true
 
   he@1.2.0: {}
 
@@ -3886,7 +3834,6 @@ snapshots:
       acorn-import-attributes: 1.9.5(acorn@8.16.0)
       cjs-module-lexer: 1.4.3
       module-details-from-path: 1.0.4
-    optional: true
 
   imurmurhash@0.1.4: {}
 
@@ -3918,7 +3865,6 @@ snapshots:
   is-core-module@2.16.1:
     dependencies:
       hasown: 2.0.3
-    optional: true
 
   is-extglob@2.1.1: {}
 
@@ -4098,8 +4044,7 @@ snapshots:
       yargs-parser: 20.2.9
       yargs-unparser: 2.0.0
 
-  module-details-from-path@1.0.4:
-    optional: true
+  module-details-from-path@1.0.4: {}
 
   ms@2.1.3: {}
 
@@ -4164,8 +4109,7 @@ snapshots:
 
   path-key@3.1.1: {}
 
-  path-parse@1.0.7:
-    optional: true
+  path-parse@1.0.7: {}
 
   path-scurry@1.11.1:
     dependencies:
@@ -4181,11 +4125,9 @@ snapshots:
 
   pathval@2.0.1: {}
 
-  pg-int8@1.0.1:
-    optional: true
+  pg-int8@1.0.1: {}
 
-  pg-protocol@1.13.0:
-    optional: true
+  pg-protocol@1.13.0: {}
 
   pg-types@2.2.0:
     dependencies:
@@ -4194,7 +4136,6 @@ snapshots:
       postgres-bytea: 1.0.1
       postgres-date: 1.0.7
       postgres-interval: 1.2.0
-    optional: true
 
   picocolors@1.1.1: {}
 
@@ -4228,19 +4169,15 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  postgres-array@2.0.0:
-    optional: true
+  postgres-array@2.0.0: {}
 
-  postgres-bytea@1.0.1:
-    optional: true
+  postgres-bytea@1.0.1: {}
 
-  postgres-date@1.0.7:
-    optional: true
+  postgres-date@1.0.7: {}
 
   postgres-interval@1.2.0:
     dependencies:
       xtend: 4.0.2
-    optional: true
 
   prelude-ls@1.2.1: {}
 
@@ -4296,7 +4233,6 @@ snapshots:
       resolve: 1.22.12
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   resolve-from@4.0.0: {}
 
@@ -4308,7 +4244,6 @@ snapshots:
       is-core-module: 2.16.1
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
-    optional: true
 
   restore-cursor@5.1.0:
     dependencies:
@@ -4371,8 +4306,7 @@ snapshots:
 
   shebang-regex@3.0.0: {}
 
-  shimmer@1.2.1:
-    optional: true
+  shimmer@1.2.1: {}
 
   siginfo@2.0.0: {}
 
@@ -4444,8 +4378,7 @@ snapshots:
     dependencies:
       has-flag: 4.0.0
 
-  supports-preserve-symlinks-flag@1.0.0:
-    optional: true
+  supports-preserve-symlinks-flag@1.0.0: {}
 
   tdigest@0.1.2:
     dependencies:
@@ -4623,8 +4556,7 @@ snapshots:
 
   ws@8.20.0: {}
 
-  xtend@4.0.2:
-    optional: true
+  xtend@4.0.2: {}
 
   y18n@5.0.8: {}
 
