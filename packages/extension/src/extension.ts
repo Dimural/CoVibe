@@ -4,7 +4,7 @@ import { SessionPanel } from './ui/sessionPanel.js';
 import { getOrCreateIdentity } from './identity.js';
 import { getConfig } from './config.js';
 import { SessionManager } from './session/manager.js';
-import { userMessage } from './errors.js';
+import { userMessage, BranchMismatchError } from './errors.js';
 import { RelayClient } from './relay/client.js';
 import { getRepoContext } from './git/context.js';
 import type { SessionState } from './session/state.js';
@@ -283,6 +283,10 @@ export function activate(context: vscode.ExtensionContext): void {
           );
           void vscode.window.showInformationMessage('CoVibes: Joined session.');
         } catch (err) {
+          if (err instanceof BranchMismatchError) {
+            void vscode.window.showWarningMessage(userMessage(err));
+            return;
+          }
           void vscode.window.showErrorMessage(userMessage(err));
         }
       })();

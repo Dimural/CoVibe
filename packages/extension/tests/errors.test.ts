@@ -86,4 +86,14 @@ describe('userMessage', () => {
     const msg = userMessage(new GitNoRemoteError());
     expect(msg).toContain('remote');
   });
+
+  it('returns actionable message for AuthFailedError', () => {
+    const msg = userMessage(new AuthFailedError());
+    expect(msg).toContain('expired');
+  });
+
+  it('returns actionable message for InvalidInviteLinkError', () => {
+    const msg = userMessage(new InvalidInviteLinkError('covibes://bad'));
+    expect(msg).toContain('covibes://join');
+  });
 });
