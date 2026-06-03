@@ -2,6 +2,10 @@
 CoVibes_PRD.md
 CoVibes_PLAN.md
 
+# Claude / AI tooling — local only
+.claude/
+docs/superpowers/
+
 # Node / pnpm
 node_modules/
 .pnpm-store/
