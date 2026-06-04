@@ -6,9 +6,9 @@ export default tseslint.config(
     ignores: [
       '**/node_modules/',
       '**/dist/',
-      'coverage/',
-      'out/',
-      '.vscode-test/',
+      '**/coverage/',
+      '**/out/',
+      '**/.vscode-test/',
       'eslint.config.js',
       '**/*.config.ts',
       '**/*.config.mjs',

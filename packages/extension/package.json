@@ -5,13 +5,13 @@
   "version": "0.0.1",
   "publisher": "covibes",
   "icon": "media/icon.png",
-  "homepage": "https://github.com/covibes/covibes",
+  "homepage": "https://github.com/Dimural/CoVibe",
   "repository": {
     "type": "git",
-    "url": "https://github.com/covibes/covibes.git"
+    "url": "https://github.com/Dimural/CoVibe.git"
   },
   "bugs": {
-    "url": "https://github.com/covibes/covibes/issues"
+    "url": "https://github.com/Dimural/CoVibe/issues"
   },
   "license": "MIT",
   "keywords": [

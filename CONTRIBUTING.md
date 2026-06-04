@@ -10,7 +10,7 @@
 ## Setup
 
 ```bash
-git clone https://github.com/covibes/covibes
+git clone https://github.com/Dimural/CoVibe
 cd covibes
 pnpm install
 pnpm build

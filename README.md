@@ -28,17 +28,17 @@ CoVibes lets 2–4 developers work on the same git branch simultaneously, with f
 
 ## Features
 
-| | Feature | Description |
-|---|---|---|
-| 📝 | **Real-time sync** | Every keystroke synced via OT — works with any AI agent |
-| 🖱️ | **Live cursors** | See every collaborator's cursor and selection in color |
-| 👁️ | **Follow mode** | Mirror a teammate's navigation for walkthroughs and review |
-| 🤖 | **Agent detection** | Heuristics detect AI bursts; intent broadcast shows who's writing what |
-| 🔀 | **Auto-merge** | Non-overlapping agent edits merged silently |
-| ⚡ | **Conflict UI** | Three-panel shared editor when agent edits overlap — resolve together |
-| 🔧 | **Git coordination** | Commit and push with a 10s notification window for teammates |
-| 🌿 | **Branch scoping** | Sessions are branch-scoped; switching branches cleanly exits |
-| 🔒 | **No code stored** | The relay routes messages only — your code never leaves your machine |
+|     | Feature              | Description                                                            |
+| --- | -------------------- | ---------------------------------------------------------------------- |
+| 📝  | **Real-time sync**   | Every keystroke synced via OT — works with any AI agent                |
+| 🖱️  | **Live cursors**     | See every collaborator's cursor and selection in color                 |
+| 👁️  | **Follow mode**      | Mirror a teammate's navigation for walkthroughs and review             |
+| 🤖  | **Agent detection**  | Heuristics detect AI bursts; intent broadcast shows who's writing what |
+| 🔀  | **Auto-merge**       | Non-overlapping agent edits merged silently                            |
+| ⚡  | **Conflict UI**      | Three-panel shared editor when agent edits overlap — resolve together  |
+| 🔧  | **Git coordination** | Commit and push with a 10s notification window for teammates           |
+| 🌿  | **Branch scoping**   | Sessions are branch-scoped; switching branches cleanly exits           |
+| 🔒  | **No code stored**   | The relay routes messages only — your code never leaves your machine   |
 
 <br>
 
@@ -111,7 +111,7 @@ docs/             Architecture diagrams · Troubleshooting guide
 
 ```bash
 # Clone and install
-git clone https://github.com/covibes/covibes
+git clone https://github.com/Dimural/CoVibe
 cd covibes
 pnpm install && pnpm build
 
@@ -131,13 +131,13 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full dev setup guide.
 
 ## Settings
 
-| Setting | Default | Description |
-|---|---|---|
-| `covibes.relayUrl` | `wss://covibes-relay.fly.dev` | WebSocket relay server URL |
-| `covibes.followMode.enabled` | `true` | Follow a collaborator's navigation |
-| `covibes.agentDetection.enabled` | `true` | Detect AI agent activity |
-| `covibes.gracePeriodSeconds` | `1800` | Session grace period after last disconnect |
-| `covibes.telemetry.enabled` | `false` | Anonymous usage statistics (opt-in) |
+| Setting                          | Default                       | Description                                |
+| -------------------------------- | ----------------------------- | ------------------------------------------ |
+| `covibes.relayUrl`               | `wss://covibes-relay.fly.dev` | WebSocket relay server URL                 |
+| `covibes.followMode.enabled`     | `true`                        | Follow a collaborator's navigation         |
+| `covibes.agentDetection.enabled` | `true`                        | Detect AI agent activity                   |
+| `covibes.gracePeriodSeconds`     | `1800`                        | Session grace period after last disconnect |
+| `covibes.telemetry.enabled`      | `false`                       | Anonymous usage statistics (opt-in)        |
 
 <br>
 

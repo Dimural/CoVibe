@@ -1,23 +1,23 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <!-- CSP injected by extension via webview.cspSource -->
-  <!-- CSP: no remote resources. unsafe-inline for inline status icon colors only. -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CoVibes Session</title>
-  <link rel="stylesheet" href="STYLES_URI">
-</head>
-<body>
-  <div id="app">
-    <div id="status-section">
-      <p id="status-text">Not connected</p>
+  <head>
+    <meta charset="UTF-8" />
+    <!-- CSP injected by extension via webview.cspSource -->
+    <!-- CSP: no remote resources. unsafe-inline for inline status icon colors only. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CoVibes Session</title>
+    <link rel="stylesheet" href="STYLES_URI" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="status-section">
+        <p id="status-text">Not connected</p>
+      </div>
+      <div id="participants-section">
+        <h2>Participants</h2>
+        <ul id="participants-list"></ul>
+      </div>
     </div>
-    <div id="participants-section">
-      <h2>Participants</h2>
-      <ul id="participants-list"></ul>
-    </div>
-  </div>
-  <script src="SCRIPT_URI"></script>
-</body>
+    <script src="SCRIPT_URI"></script>
+  </body>
 </html>

@@ -40,7 +40,7 @@ CoVibes brings Google Docs–style live collaboration to VS Code, purpose-built 
 
 ## Privacy
 
-Telemetry is off by default. When enabled, only anonymous, aggregated events are sent — never code, file paths, or personal data. See [PRIVACY.md](https://github.com/covibes/covibes/blob/main/PRIVACY.md) for full details.
+Telemetry is off by default. When enabled, only anonymous, aggregated events are sent — never code, file paths, or personal data. See [PRIVACY.md](https://github.com/Dimural/CoVibe/blob/main/PRIVACY.md) for full details.
 
 ## Troubleshooting
 

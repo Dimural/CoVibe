@@ -6,11 +6,11 @@ CoVibes collects **anonymous, aggregated usage statistics** to help improve the 
 
 When telemetry is enabled, CoVibes may collect:
 
-| Event               | Data                                                              |
-| ------------------- | ----------------------------------------------------------------- |
-| `session_start`     | Number of participants (integer)                                  |
-| `sync_latency_high` | Sync latency in milliseconds when above 300ms threshold           |
-| `error`             | Error code string (e.g. `RelayUnreachable`)                       |
+| Event               | Data                                                    |
+| ------------------- | ------------------------------------------------------- |
+| `session_start`     | Number of participants (integer)                        |
+| `sync_latency_high` | Sync latency in milliseconds when above 300ms threshold |
+| `error`             | Error code string (e.g. `RelayUnreachable`)             |
 
 ## What CoVibes never collects
 
@@ -30,4 +30,4 @@ Set `covibes.telemetry.enabled` to `false` in VS Code Settings (it defaults to `
 
 ## Contact
 
-Questions? Open an issue at https://github.com/covibes/covibes/issues.
+Questions? Open an issue at https://github.com/Dimural/CoVibe/issues.
