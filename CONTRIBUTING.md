@@ -11,7 +11,7 @@
 
 ```bash
 git clone https://github.com/Dimural/CoVibe
-cd covibes
+cd CoVibe
 pnpm install
 pnpm build
 pnpm test
@@ -36,7 +36,7 @@ docs/         Architecture, troubleshooting
 
 ```bash
 pnpm --filter @covibes/relay dev
-# Relay listens on ws://localhost:3000
+# Relay listens on ws://localhost:8080 (no Redis needed locally)
 ```
 
 ### Launch the extension in a development host
@@ -44,7 +44,7 @@ pnpm --filter @covibes/relay dev
 1. Open the repo in VS Code
 2. Press **F5** (or Run → Start Debugging)
 3. A new VS Code window opens with CoVibes loaded
-4. Set `covibes.relayUrl` to `ws://localhost:3000` in that window
+4. Set `covibes.relayUrl` to `ws://localhost:8080` in that window
 
 ### Two-window manual test
 

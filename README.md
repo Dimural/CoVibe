@@ -112,18 +112,28 @@ docs/             Architecture diagrams · Troubleshooting guide
 ```bash
 # Clone and install
 git clone https://github.com/Dimural/CoVibe
-cd covibes
+cd CoVibe
 pnpm install && pnpm build
 
-# Start the relay
-PORT=3000 pnpm --filter @covibes/relay dev
+# Start the relay (listens on ws://localhost:8080 — no Redis needed locally)
+pnpm --filter @covibes/relay dev
 
 # Launch extension in VS Code
 # Press F5 → Extension Development Host opens
-# Set covibes.relayUrl = ws://localhost:3000 in settings
+# Set covibes.relayUrl = ws://localhost:8080 in settings
 ```
 
 Open a second VS Code window with F5 → Start Session in Window A → Join Session in Window B. Both windows should show **Active(2)** in the status bar.
+
+> **Prefer a normal install over the F5 dev host?** Package the extension and install it into your everyday VS Code:
+>
+> ```bash
+> pnpm --filter covibes build
+> cd packages/extension && npx --yes @vscode/vsce package --no-dependencies
+> code --install-extension covibes-*.vsix --force
+> ```
+>
+> Then start the relay (above) and set `covibes.relayUrl = ws://localhost:8080` in Settings.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full dev setup guide.
 
